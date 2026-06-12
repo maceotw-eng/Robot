@@ -47,12 +47,16 @@ canvas{display:block;outline:none}
 /* 標籤疊層 */
 #leaders{position:absolute;inset:0;pointer-events:none;width:100%;height:100%}
 .tag{
-  position:absolute;transform:translate(-50%,-50%);
+  position:absolute;left:0;top:0;will-change:transform;
   background:var(--panel);border:1px solid var(--line);border-radius:3px;
   font-family:var(--mono);font-size:11px;line-height:1;
   padding:5px 8px 5px 6px;color:var(--ink);white-space:nowrap;
   box-shadow:0 1px 3px rgba(20,35,50,.12);cursor:pointer;user-select:none;
   display:flex;align-items:center;gap:6px;
+}
+.tag.info{
+  background:var(--blue);border-color:var(--blue);color:#fff;
+  pointer-events:none;font-size:10.5px;padding:5px 9px;
 }
 .tag .no{color:var(--blue);font-weight:600}
 .tag.key{border-color:#F0B894}
@@ -139,6 +143,8 @@ button.btn:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 #d-no{font-family:var(--mono);font-size:12px;color:var(--blue)}
 #d-name{font-family:var(--disp);font-size:16px;font-weight:600}
 #d-key{font-family:var(--mono);font-size:10px;color:var(--orange);border:1px solid #F2B48C;border-radius:3px;padding:1px 6px}
+#d-hint{font-size:11.5px;line-height:1.7;color:var(--blue);background:var(--blue-soft);border:1px solid #BDD4EC;border-radius:4px;padding:7px 10px;margin-bottom:8px}
+#d-hint b{color:var(--blue)}
 #d-desc{font-size:12.5px;line-height:1.75;color:#3A4754}
 #d-desc b{color:var(--ink)}
 #d-spec{margin-top:8px;font-family:var(--mono);font-size:11px;color:var(--dim);background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:7px 10px;line-height:1.7}
@@ -232,6 +238,7 @@ footer-note{display:block;padding:12px 18px 20px;font-size:11px;color:#8B97A2;li
       <div id="d-empty">點選 3D 場景中的零件、標籤，或上方清單，查看零件介紹。</div>
       <div id="d-body" hidden>
         <div id="d-head"><span id="d-no"></span><span id="d-name"></span><span id="d-key" hidden>關鍵零件</span></div>
+        <div id="d-hint" hidden>⬡ 此零件位於<b>每一軸關節內部</b>（A1–A6 共 6 組）——選取時 3D 場景中六個關節會亮起橘色環標示位置；旁邊的展示台只是把它放大剖視。</div>
         <div id="d-desc"></div>
         <div id="d-spec"></div>
       </div>
@@ -344,8 +351,9 @@ function setMode(){
 // 零件清單
 (function(){
   const wrap=$('plist');let lastGrp='';
+  const GRP_LABEL={'關節模組':'關節模組 — 每軸 A1–A6 各一組'};
   for(const c of COMPS){
-    if(c.grp!==lastGrp){const g=document.createElement('div');g.className='grp';g.textContent=c.grp;wrap.appendChild(g);lastGrp=c.grp;}
+    if(c.grp!==lastGrp){const g=document.createElement('div');g.className='grp';g.textContent=GRP_LABEL[c.grp]||c.grp;wrap.appendChild(g);lastGrp=c.grp;}
     const it=document.createElement('div');it.className='item';it.id='li-'+c.id;it.tabIndex=0;it.setAttribute('role','button');
     it.innerHTML=`<span class="no">${c.no}</span><span class="nm">${c.name}</span>${c.key?'<span class="chip-key">關鍵</span>':''}`;
     it.addEventListener('click',()=>select(c.id,true));
@@ -365,6 +373,7 @@ function select(id,focus){
   if(c){
     $('d-no').textContent=c.no;$('d-name').textContent=c.name;
     $('d-key').hidden=!c.key;
+    $('d-hint').hidden=(c.grp!=='關節模組');
     $('d-desc').innerHTML=c.desc;$('d-spec').textContent=c.spec;
     const li=$('li-'+c.id); if(li&&focus) li.scrollIntoView({block:'nearest'});
   }
@@ -411,45 +420,78 @@ const scene3d=(function(){
   const anchors={};              // compId → Object3D（標籤錨點）
   function anchor(compId,parent,x,y,z){const o=new THREE.Object3D();o.position.set(x,y,z);parent.add(o);anchors[compId]=o;}
 
-  /* ── 手臂本體 ── */
+  function tcyl(rt,rb,h,m,seg=28){return new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),m)}
+
+  /* ── 手臂本體（仿 IRB 2600 結構）── */
   const robot=new THREE.Group();robot.position.set(-0.4,0,-0.2);scene.add(robot);
 
-  const basePlate=reg(cyl(0.58,0.07,M.steel),'base');basePlate.position.y=0.035;robot.add(basePlate);
-  const baseBody=reg(cyl(0.46,0.20,M.dark),'base');baseBody.position.y=0.17;robot.add(baseBody);
-  anchor('base',robot,0.5,0.12,0.3);
+  // 底座：方形安裝座＋錐形殼
+  const basePlate=reg(box(0.96,0.10,0.80,M.steel),'base');basePlate.position.y=0.05;robot.add(basePlate);
+  const baseBody=reg(tcyl(0.34,0.44,0.30,M.dark),'base');baseBody.position.y=0.25;robot.add(baseBody);
+  [[-0.40,-0.32],[0.40,-0.32],[-0.40,0.32],[0.40,0.32]].forEach(([bx,bz])=>{
+    const b=cyl(0.045,0.05,M.steel,12);b.position.set(bx,0.115,bz);robot.add(b);});
+  anchor('base',robot,0.56,0.12,0.34);
 
-  const j1=new THREE.Group();j1.position.y=0.27;robot.add(j1);
-  const turret=reg(cyl(0.40,0.44,M.orange),'turret');turret.position.y=0.22;j1.add(turret);
-  anchor('turret',j1,-0.42,0.3,0.18);
+  // A1 迴轉座：錐形殼＋後側 A1 馬達
+  const j1=new THREE.Group();j1.position.y=0.40;robot.add(j1);
+  const turret=reg(tcyl(0.30,0.38,0.36,M.orange),'turret');turret.position.y=0.18;j1.add(turret);
+  const turretCap=reg(box(0.40,0.20,0.46,M.orange),'turret');turretCap.position.set(0.05,0.42,0);j1.add(turretCap);
+  const m1=reg(cyl(0.105,0.30,M.motor,18),'motor');m1.rotation.x=Math.PI/2;m1.position.set(-0.10,0.18,-0.42);j1.add(m1);
+  const m1cap=reg(cyl(0.06,0.06,M.dark,14),'motor');m1cap.rotation.x=Math.PI/2;m1cap.position.set(-0.10,0.18,-0.60);j1.add(m1cap);
+  anchor('turret',j1,-0.44,0.24,0.20);
 
-  const j2=new THREE.Group();const J2Y=0.44;j2.position.set(0.17,J2Y,0);j1.add(j2);
-  const shoulderHub=reg(cyl(0.22,0.36,M.dark),'lowerarm');shoulderHub.rotation.z=Math.PI/2;j2.add(shoulderHub);
+  // A2 肩關節：橫向轂＋側伸 A2 馬達＋帶肋下臂
+  const j2=new THREE.Group();j2.position.set(0.18,0.50,0);j1.add(j2);
+  const shoulderHub=reg(cyl(0.24,0.36,M.dark),'lowerarm');shoulderHub.rotation.z=Math.PI/2;j2.add(shoulderHub);
+  const m2=reg(cyl(0.115,0.26,M.motor,18),'motor');m2.rotation.z=Math.PI/2;m2.position.set(0.30,0,0);j2.add(m2);
+  const m2cap=reg(cyl(0.065,0.06,M.dark,14),'motor');m2cap.rotation.z=Math.PI/2;m2cap.position.set(0.46,0,0);j2.add(m2cap);
   const L1=1.05;
-  const lowerArm=reg(box(0.30,L1,0.26,M.orange),'lowerarm');lowerArm.position.y=L1/2;j2.add(lowerArm);
-  anchor('lowerarm',j2,0.24,L1*0.55,0.16);
-  // 本體線束（沿下臂側）
-  const harness=reg(cyl(0.035,L1*0.9,M.cable,10),'cable');harness.position.set(-0.20,L1/2,0.1);j2.add(harness);
+  const lowerArm=reg(box(0.24,L1,0.30,M.orange),'lowerarm');lowerArm.position.y=L1/2;j2.add(lowerArm);
+  const rib=reg(box(0.28,L1*0.62,0.10,M.orange),'lowerarm');rib.position.set(0,L1*0.46,0.18);j2.add(rib);
+  anchor('lowerarm',j2,0.26,L1*0.58,0.20);
+  const harness=reg(cyl(0.030,L1*0.85,M.cable,10),'cable');harness.position.set(-0.16,L1/2,0.14);j2.add(harness);
 
+  // A3 手肘：橫向轂＋向後延伸的上臂大鑄件（內含 A3/A4 馬達）
   const j3=new THREE.Group();j3.position.y=L1;j2.add(j3);
-  const elbowHub=reg(cyl(0.19,0.34,M.dark),'upperarm');elbowHub.rotation.z=Math.PI/2;j3.add(elbowHub);
-  const elbowBlock=reg(box(0.26,0.30,0.24,M.orange),'upperarm');elbowBlock.position.y=0.12;j3.add(elbowBlock);
-  anchor('upperarm',j3,-0.25,0.18,0.15);
+  const elbowHub=reg(cyl(0.20,0.38,M.dark),'upperarm');elbowHub.rotation.z=Math.PI/2;j3.add(elbowHub);
+  const housing=reg(box(0.32,0.34,0.64,M.orange),'upperarm');housing.position.set(0,0.15,-0.16);j3.add(housing);
+  const m3=reg(cyl(0.10,0.24,M.motor,18),'motor');m3.rotation.x=Math.PI/2;m3.position.set(0.08,0.15,-0.56);j3.add(m3);
+  const m3b=reg(cyl(0.10,0.24,M.motor,18),'motor');m3b.rotation.x=Math.PI/2;m3b.position.set(-0.08,0.15,-0.56);j3.add(m3b);
+  anchor('upperarm',j3,-0.32,0.32,0.22);
 
-  const j4=new THREE.Group();j4.position.y=0.24;j3.add(j4);
-  const L2=0.92;
-  const forearm=reg(box(0.20,L2,0.20,M.orange),'upperarm');forearm.position.y=L2/2;j4.add(forearm);
-  const motor4=reg(cyl(0.10,0.26,M.dark),'wrist');motor4.position.set(0,0.16,0.15);motor4.rotation.x=Math.PI/2;j4.add(motor4);
+  // A4 前臂：錐形轉接＋細管（內走線）
+  const j4=new THREE.Group();j4.position.set(0,0.32,0.06);j3.add(j4);
+  const cone=reg(tcyl(0.085,0.16,0.18,M.orange,20),'upperarm');cone.position.y=0.09;j4.add(cone);
+  const L2=0.78;
+  const tube=reg(cyl(0.085,L2,M.orange,20),'upperarm');tube.position.y=0.18+L2/2;j4.add(tube);
+  // 腕叉（隨 A4 滾轉）
+  const forkL=reg(box(0.05,0.26,0.17,M.orange),'wrist');forkL.position.set(-0.105,0.18+L2+0.06,0);j4.add(forkL);
+  const forkR=reg(forkL.clone(),'wrist');forkR.position.x=0.105;j4.add(forkR);
 
-  const j5=new THREE.Group();j5.position.y=L2;j4.add(j5);
-  const wristHub=reg(cyl(0.12,0.24,M.dark),'wrist');wristHub.rotation.z=Math.PI/2;j5.add(wristHub);
-  const wristFork=reg(box(0.16,0.18,0.14,M.orange),'wrist');wristFork.position.y=0.10;j5.add(wristFork);
-  anchor('wrist',j5,0.2,0.12,0.12);
+  // A5 腕俯仰：叉間轂＋腕頭
+  const j5=new THREE.Group();j5.position.y=0.18+L2+0.10;j4.add(j5);
+  const wristHub=reg(cyl(0.068,0.16,M.dark),'wrist');wristHub.rotation.z=Math.PI/2;j5.add(wristHub);
+  const wristHead=reg(box(0.13,0.17,0.13,M.orange),'wrist');wristHead.position.y=0.10;j5.add(wristHead);
+  anchor('wrist',j5,0.20,0.08,0.12);
 
-  const j6=new THREE.Group();j6.position.y=0.20;j5.add(j6);
-  const flange=reg(cyl(0.085,0.06,M.steel),'flange');flange.position.y=0.03;j6.add(flange);
-  const fL=reg(box(0.03,0.16,0.05,M.steel),'flange');fL.position.set(-0.05,0.13,0);j6.add(fL);
-  const fR=fL.clone();fR.position.x=0.05;reg(fR,'flange');j6.add(fR);
-  anchor('flange',j6,0.14,0.1,0);
+  // A6 法蘭＋夾爪
+  const j6=new THREE.Group();j6.position.y=0.21;j5.add(j6);
+  const flange=reg(cyl(0.075,0.05,M.steel),'flange');flange.position.y=0.025;j6.add(flange);
+  const fL=reg(box(0.03,0.15,0.05,M.steel),'flange');fL.position.set(-0.05,0.12,0);j6.add(fL);
+  const fR=reg(fL.clone(),'flange');fR.position.x=0.05;j6.add(fR);
+  anchor('flange',j6,0.14,0.10,0);
+
+  // 六軸關節環標記（選取「關節模組」零件時顯示，指出每一軸都有此機構）
+  const markerMat=new THREE.MeshBasicMaterial({color:0xF25C0A,transparent:true,opacity:.8});
+  const markers=[];
+  function jmark(parent,axisDir,y,r){
+    const t=new THREE.Mesh(new THREE.TorusGeometry(r,0.016,10,40),markerMat);
+    if(axisDir==='y')t.rotation.x=Math.PI/2; else t.rotation.y=Math.PI/2;
+    t.position.y=y;t.visible=false;parent.add(t);markers.push(t);
+  }
+  jmark(robot,'y',0.42,0.46); jmark(j2,'x',0,0.30); jmark(j3,'x',0,0.26);
+  jmark(j4,'y',0.45,0.13);    jmark(j5,'x',0,0.12); jmark(j6,'y',0.03,0.11);
+  let markersOn=false;
 
   /* ── 關節模組剖視（展示台）── */
   const station=new THREE.Group();station.position.set(2.15,0,0.55);scene.add(station);
@@ -479,6 +521,25 @@ const scene3d=(function(){
   }
   // 中心軸（分解時顯示串接關係）
   const axis=cyl(0.018,1.9,M.dark,8);axis.position.y=1.3;axis.visible=false;station.add(axis);
+
+  // 展示台 → 手肘關節 的虛線（指出此模組就藏在每個關節內）
+  const linkPts=new Float32Array(6);
+  const linkGeo=new THREE.BufferGeometry();
+  linkGeo.setAttribute('position',new THREE.BufferAttribute(linkPts,3));
+  const linkLine=new THREE.Line(linkGeo,new THREE.LineDashedMaterial({color:0x4A77A8,dashSize:0.13,gapSize:0.08,transparent:true,opacity:.7}));
+  scene.add(linkLine);
+  const _lw1=new THREE.Vector3(),_lw2=new THREE.Vector3();
+  function updateLink(){
+    elbowHub.getWorldPosition(_lw1);
+    _lw2.set(station.position.x,1.05,station.position.z);
+    linkPts[0]=_lw1.x;linkPts[1]=_lw1.y;linkPts[2]=_lw1.z;
+    linkPts[3]=_lw2.x;linkPts[4]=_lw2.y;linkPts[5]=_lw2.z;
+    linkGeo.attributes.position.needsUpdate=true;
+    linkLine.computeLineDistances();
+    linkLine.visible=state.tags;
+  }
+  // 展示台資訊標示錨點
+  const stationInfoAnchor=new THREE.Object3D();stationInfoAnchor.position.y=1.62;station.add(stationInfoAnchor);
 
   /* ── 控制系統 ── */
   const ctrlG=new THREE.Group();ctrlG.position.set(-2.55,0,1.25);ctrlG.rotation.y=0.5;scene.add(ctrlG);
@@ -536,42 +597,55 @@ const scene3d=(function(){
     tagWrap.appendChild(el);
     tags[c.id]=el;
   }
+  // 展示台資訊標示（不可點，藍色）
+  const infoEl=document.createElement('div');
+  infoEl.className='tag info';
+  infoEl.textContent='關節內部機構剖視 — A1–A6 每軸各一組';
+  tagWrap.appendChild(infoEl);
+
   const v3=new THREE.Vector3();
+  function place(el,tx,ty){el.style.transform=`translate3d(${tx.toFixed(1)}px,${ty.toFixed(1)}px,0) translate(-50%,-50%)`;}
+  function project(a){a.getWorldPosition(v3);v3.project(camera);return v3.z<=1;}
   function updateTags(){
     const w=mount.clientWidth,h=mount.clientHeight;
     let lines='';
     for(const c of COMPS){
       const el=tags[c.id],a=anchors[c.id];
-      if(!a||!state.tags){el.classList.add('hidden');continue;}
-      a.getWorldPosition(v3);v3.project(camera);
-      if(v3.z>1){el.classList.add('hidden');continue;}
+      if(!a||!state.tags||!project(a)){el.classList.add('hidden');continue;}
       el.classList.remove('hidden');
       const ax=(v3.x+1)/2*w, ay=(-v3.y+1)/2*h;
       const off=TAG_OFFSET[c.id]||[80,-30];
       const tx=Math.max(56,Math.min(w-56,ax+off[0]));
       const ty=Math.max(18,Math.min(h-18,ay+off[1]));
-      el.style.left=tx+'px';el.style.top=ty+'px';
+      place(el,tx,ty);
       el.classList.toggle('sel',state.sel===c.id);
       const col=state.sel===c.id?'#F25C0A':'#7E94AC';
-      lines+=`<line x1="${ax}" y1="${ay}" x2="${tx}" y2="${ty}" stroke="${col}" stroke-width="1"/>`+
-             `<circle cx="${ax}" cy="${ay}" r="2.4" fill="${col}"/>`;
+      lines+=`<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${tx.toFixed(1)}" y2="${ty.toFixed(1)}" stroke="${col}" stroke-width="1"/>`+
+             `<circle cx="${ax.toFixed(1)}" cy="${ay.toFixed(1)}" r="2.4" fill="${col}"/>`;
     }
+    // 資訊標示
+    if(state.tags&&project(stationInfoAnchor)){
+      infoEl.classList.remove('hidden');
+      const ax=(v3.x+1)/2*w, ay=(-v3.y+1)/2*h;
+      place(infoEl,Math.max(110,Math.min(w-110,ax)),Math.max(16,ay-26));
+    } else infoEl.classList.add('hidden');
     svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
     svg.innerHTML=state.tags?lines:'';
   }
 
-  /* ── 選取高亮 ── */
-  let halo=null;
+  /* ── 選取高亮（同類零件全部高亮，例如 6 張驅動器卡、各軸馬達）── */
+  const haloMat=new THREE.MeshBasicMaterial({color:0xF25C0A,wireframe:true,transparent:true,opacity:.85});
+  let halos=[];
   function onSelect(id,focus){
-    if(halo){halo.parent.remove(halo);halo.geometry.dispose();halo=null;}
+    halos.forEach(hm=>{hm.parent.remove(hm);hm.geometry.dispose();});halos=[];
+    markersOn=false;
     if(id){
-      const target3=pick.find(m=>m.userData.comp===id);
-      if(target3){
-        halo=new THREE.Mesh(target3.geometry.clone(),
-          new THREE.MeshBasicMaterial({color:0xF25C0A,wireframe:true,transparent:true,opacity:.85}));
-        halo.scale.setScalar(1.045);
-        target3.add(halo);
-      }
+      pick.filter(m=>m.userData.comp===id).forEach(m=>{
+        const hm=new THREE.Mesh(m.geometry.clone(),haloMat);
+        hm.scale.setScalar(1.05);
+        m.add(hm);halos.push(hm);
+      });
+      markersOn=(byId[id].grp==='關節模組');
       if(focus){
         const a=anchors[id];
         if(a){
@@ -600,7 +674,7 @@ const scene3d=(function(){
     if(!drag)return;
     const dx=e.clientX-px,dy=e.clientY-py;moved+=Math.abs(dx)+Math.abs(dy);
     theta+=dx*0.006;phi-=dy*0.006;phi=Math.max(0.25,Math.min(1.5,phi));
-    px=e.clientX;py=e.clientY;focusing=false;updateCam();
+    px=e.clientX;py=e.clientY;focusing=false;
   });
   el.addEventListener('pointerup',e=>{
     drag=false;
@@ -613,12 +687,12 @@ const scene3d=(function(){
       if(hits.length)select(hits[0].object.userData.comp,true);
     }
   });
-  el.addEventListener('wheel',e=>{e.preventDefault();dist=Math.max(2.6,Math.min(16,dist+e.deltaY*0.005));focusing=false;updateCam();},{passive:false});
+  el.addEventListener('wheel',e=>{e.preventDefault();dist=Math.max(2.6,Math.min(16,dist+e.deltaY*0.005));focusing=false;},{passive:false});
   let pinch=0;
   el.addEventListener('touchmove',e=>{
     if(e.touches.length===2){
       const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
-      if(pinch)dist=Math.max(2.6,Math.min(16,dist-(d-pinch)*0.01)),focusing=false,updateCam();
+      if(pinch)dist=Math.max(2.6,Math.min(16,dist-(d-pinch)*0.01)),focusing=false;
       pinch=d;e.preventDefault();
     }},{passive:false});
   el.addEventListener('touchend',()=>pinch=0);
@@ -665,9 +739,17 @@ const scene3d=(function(){
       target.lerp(focusTarget,Math.min(1,dt*4));
       dist+=(focusDist-dist)*Math.min(1,dt*4);
       if(target.distanceTo(focusTarget)<0.02&&Math.abs(dist-focusDist)<0.05)focusing=false;
-      updateCam();
     }
+    updateCam();
 
+    // 六軸關節環脈動
+    const ms=1+0.07*Math.sin(t*5);
+    markers.forEach(mk=>{mk.visible=markersOn;if(markersOn)mk.scale.setScalar(ms);});
+
+    // 先同步全場景與相機矩陣，再投影標籤 → 標籤與物件零延遲貼合
+    scene.updateMatrixWorld(true);
+    camera.updateMatrixWorld(true);
+    updateLink();
     updateTags();
     renderer.render(scene,camera);
   }
