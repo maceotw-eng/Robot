@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>SOL 迷因雷達 — 即時潛力掃描</title>
+<style>
+:root{
+  --bg:#0a0d14;
+  --bg2:#0f1420;
+  --card:#131a2a;
+  --card2:#1a2338;
+  --line:#232d45;
+  --text:#e8edf7;
+  --dim:#8b96ad;
+  --faint:#5a657e;
+  --up:#2fd48a;
+  --down:#ff5c6c;
+  --gold:#ffc94d;
+  --gold-dim:#8a6a1e;
+  --violet:#7c8cff;
+  --s-rank:#ffc94d;
+  --a-rank:#2fd48a;
+  --b-rank:#7c8cff;
+  --c-rank:#5a657e;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;min-height:100%}
+body{padding-bottom:90px}
+
+/* ── header ── */
+header{position:sticky;top:0;z-index:50;background:rgba(10,13,20,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);padding:12px 16px 10px}
+.h-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.logo{display:flex;align-items:center;gap:9px}
+.logo-orb{width:34px;height:34px;border-radius:10px;background:radial-gradient(circle at 30% 30%,#2a3a6a,#101828);border:1px solid var(--line);display:grid;place-items:center;position:relative;overflow:hidden}
+.logo-orb::after{content:"";position:absolute;inset:-6px;background:conic-gradient(from 0deg,transparent 70%,rgba(255,201,77,.55),transparent 92%);animation:sweep 3.2s linear infinite}
+@keyframes sweep{to{transform:rotate(360deg)}}
+.logo-orb span{position:relative;z-index:1;font-size:15px}
+.logo h1{font-size:16px;font-weight:800;letter-spacing:.5px}
+.logo h1 em{font-style:normal;color:var(--gold)}
+.logo small{display:block;font-size:10px;color:var(--faint);font-weight:400;letter-spacing:1.5px}
+.h-actions{display:flex;gap:8px;align-items:center}
+.btn{border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:10px;padding:8px 12px;font-size:12.5px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:.15s}
+.btn:active{transform:scale(.96)}
+.btn.gold{background:linear-gradient(135deg,#3a2f10,#2a2410);border-color:var(--gold-dim);color:var(--gold)}
+.btn.on{background:#15291f;border-color:#2fd48a55;color:var(--up)}
+.pulse-dot{width:7px;height:7px;border-radius:50%;background:var(--up);animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(47,212,138,.5)}50%{opacity:.55;box-shadow:0 0 0 5px rgba(47,212,138,0)}}
+
+/* ── stats strip ── */
+.strip{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.stat b{display:block;font-size:14px;font-family:var(--mono);font-weight:700}
+.stat span{font-size:9.5px;color:var(--faint);letter-spacing:.8px}
+.stat b.gold{color:var(--gold)}
+
+/* ── controls ── */
+.controls{padding:12px 16px 4px;display:flex;flex-direction:column;gap:10px}
+.search-row{display:flex;gap:8px}
+.search-box{flex:1;display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:0 12px}
+.search-box input{flex:1;background:none;border:none;outline:none;color:var(--text);font-size:13px;padding:11px 0;font-family:inherit}
+.search-box input::placeholder{color:var(--faint)}
+.chips{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex-shrink:0;border:1px solid var(--line);background:var(--card);color:var(--dim);border-radius:999px;padding:6px 13px;font-size:12px;font-weight:600;cursor:pointer;transition:.15s}
+.chip.active{background:#2a2410;border-color:var(--gold-dim);color:var(--gold)}
+.chip.active.grn{background:#15291f;border-color:#2fd48a55;color:var(--up)}
+
+/* ── status / disclaimer ── */
+.status{padding:6px 16px;font-size:11.5px;color:var(--faint);display:flex;justify-content:space-between;align-items:center}
+.disclaimer{margin:8px 16px 0;padding:9px 12px;border:1px dashed #4a3a15;background:#1a1608;border-radius:10px;font-size:11px;line-height:1.55;color:#c9a95e}
+
+/* ── token cards ── */
+.list{padding:10px 12px;display:flex;flex-direction:column;gap:10px}
+.tk{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;transition:border-color .2s}
+.tk.rank-S{border-color:#6a5518;box-shadow:0 0 0 1px #6a551833, 0 4px 24px -8px rgba(255,201,77,.15)}
+.tk.rank-A{border-color:#1d5a3f66}
+.tk-main{display:flex;align-items:stretch;gap:0;cursor:pointer}
+.tk-gauge{flex-shrink:0;width:86px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:14px 6px;background:var(--bg2);border-right:1px solid var(--line)}
+.ring{position:relative;width:56px;height:56px}
+.ring svg{transform:rotate(-90deg)}
+.ring .val{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--mono);font-size:16px;font-weight:800}
+.tier{font-size:10px;font-weight:800;letter-spacing:1px;padding:2px 9px;border-radius:6px}
+.tier.S{background:#2a2410;color:var(--s-rank);border:1px solid #6a5518}
+.tier.A{background:#0f2419;color:var(--a-rank);border:1px solid #1d5a3f}
+.tier.B{background:#161c33;color:var(--b-rank);border:1px solid #2c3a6a}
+.tier.C{background:#151a26;color:var(--c-rank);border:1px solid var(--line)}
+.tk-body{flex:1;padding:12px 14px;min-width:0}
+.tk-row1{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.tk-name{display:flex;align-items:baseline;gap:7px;min-width:0}
+.tk-name b{font-size:16px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:34vw}
+.tk-name span{font-size:11px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:22vw}
+.tk-price{font-family:var(--mono);font-size:15px;font-weight:700;white-space:nowrap}
+.tk-price sub{font-size:9px;opacity:.7}
+.tk-row2{display:flex;gap:10px;margin-top:5px;font-family:var(--mono);font-size:12px}
+.pc{white-space:nowrap}.pc i{font-style:normal;color:var(--faint);font-size:10px;margin-right:3px;font-family:inherit}
+.pos{color:var(--up)}.neg{color:var(--down)}
+.tk-row3{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
+.pill{font-size:10.5px;font-family:var(--mono);background:var(--bg2);border:1px solid var(--line);border-radius:7px;padding:3px 8px;color:var(--dim)}
+.pill b{color:var(--text);font-weight:600}
+.flags{display:flex;gap:5px;margin-top:8px;flex-wrap:wrap}
+.flag{font-size:10px;padding:3px 8px;border-radius:6px;font-weight:600}
+.flag.good{background:#0f2419;color:var(--up)}
+.flag.warn{background:#2a1814;color:#ff9d6c}
+.flag.hot{background:#2a2410;color:var(--gold)}
+
+/* ── expanded detail ── */
+.tk-detail{display:none;border-top:1px solid var(--line);background:var(--bg2);padding:14px}
+.tk.open .tk-detail{display:block}
+.d-title{font-size:11px;letter-spacing:1.5px;color:var(--faint);margin-bottom:10px;font-weight:700}
+.bars{display:flex;flex-direction:column;gap:9px}
+.bar-row{display:grid;grid-template-columns:88px 1fr 38px;align-items:center;gap:10px;font-size:11.5px}
+.bar-row span{color:var(--dim)}
+.bar-track{height:7px;background:var(--card);border-radius:99px;overflow:hidden}
+.bar-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,#3a4a7c,var(--violet));transition:width .5s ease}
+.bar-fill.g{background:linear-gradient(90deg,#8a6a1e,var(--gold))}
+.bar-row em{font-style:normal;font-family:var(--mono);text-align:right;color:var(--text);font-size:11px}
+.d-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.d-cell{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:8px 10px}
+.d-cell span{font-size:9.5px;color:var(--faint);letter-spacing:.5px;display:block}
+.d-cell b{font-size:13px;font-family:var(--mono);font-weight:700}
+.d-links{display:flex;gap:8px;margin-top:12px}
+.d-links a{flex:1;text-align:center;text-decoration:none;font-size:12px;font-weight:700;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--text)}
+.d-links a.gold{background:#2a2410;border-color:var(--gold-dim);color:var(--gold)}
+.buy-meter{margin-top:12px}
+.bm-track{height:9px;border-radius:99px;overflow:hidden;display:flex;background:var(--card)}
+.bm-buy{background:var(--up)}.bm-sell{background:var(--down)}
+.bm-labels{display:flex;justify-content:space-between;font-size:10.5px;font-family:var(--mono);margin-top:4px}
+.bm-labels .b{color:var(--up)}.bm-labels .s{color:var(--down)}
+
+/* ── loading / empty ── */
+.loading{padding:50px 20px;text-align:center;color:var(--dim);font-size:13px}
+.spinner{width:38px;height:38px;margin:0 auto 14px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--gold);animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty{padding:40px 24px;text-align:center;color:var(--faint);font-size:13px;line-height:1.7}
+.skel{height:110px;border-radius:16px;background:linear-gradient(90deg,var(--card) 25%,var(--card2) 50%,var(--card) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite}
+@keyframes shimmer{to{background-position:-200% 0}}
+
+/* ── footer bar ── */
+.footbar{position:fixed;bottom:0;left:0;right:0;background:rgba(10,13,20,.95);backdrop-filter:blur(12px);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom));display:flex;justify-content:space-between;align-items:center;z-index:50}
+.footbar .info{font-size:10.5px;color:var(--faint);line-height:1.5}
+.footbar .info b{color:var(--dim)}
+@media(min-width:720px){
+  .list{max-width:760px;margin:0 auto}
+  .controls,.status,header .h-inner{max-width:760px;margin-left:auto;margin-right:auto}
+  .disclaimer{max-width:728px;margin-left:auto;margin-right:auto}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="h-inner">
+    <div class="h-top">
+      <div class="logo">
+        <div class="logo-orb"><span>📡</span></div>
+        <div>
+          <h1>SOL <em>迷因雷達</em></h1>
+          <small>MEME POTENTIAL RADAR · SOLANA</small>
+        </div>
+      </div>
+      <div class="h-actions">
+        <button class="btn" id="autoBtn"><span class="pulse-dot" id="autoDot" style="display:none"></span><span id="autoTxt">自動 關</span></button>
+        <button class="btn gold" id="scanBtn">🔍 掃描</button>
+      </div>
+    </div>
+    <div class="strip">
+      <div class="stat"><b id="stTotal">–</b><span>掃描代幣</span></div>
+      <div class="stat"><b id="stCand" class="gold">–</b><span>5x 潛力候選</span></div>
+      <div class="stat"><b id="stVol">–</b><span>總 24H 量</span></div>
+      <div class="stat"><b id="stTime">–</b><span>更新時間</span></div>
+    </div>
+  </div>
+</header>
+
+<div class="controls">
+  <div class="search-row">
+    <div class="search-box">
+      <span style="color:var(--faint)">⌕</span>
+      <input id="searchInput" placeholder="輸入代幣符號或合約地址分析（如 BONK 或 CA）">
+    </div>
+    <button class="btn" id="searchBtn">分析</button>
+  </div>
+  <div class="chips" id="filterChips">
+    <button class="chip active grn" data-f="candidates">⭐ 5x 潛力候選</button>
+    <button class="chip" data-f="all">全部</button>
+    <button class="chip" data-f="fresh">🌱 新上線 &lt;3天</button>
+    <button class="chip" data-f="micro">💎 微市值 &lt;$3M</button>
+    <button class="chip" data-f="momentum">🚀 動能強</button>
+  </div>
+</div>
+
+<div class="disclaimer">
+  ⚠️ <b>非投資建議</b>：本工具依即時鏈上數據（流動性、成交量、買賣壓、動能、市值空間）計算「5x 潛力分數」，屬量化篩選參考。迷因幣波動極高、可能歸零，任何模型都無法保證漲幅，請自行研究（DYOR）並僅投入可承受損失的資金。
+</div>
+
+<div class="status">
+  <span id="statusTxt">尚未掃描 — 按「掃描」開始</span>
+  <span id="srcTxt" style="font-family:var(--mono);font-size:10px"></span>
+</div>
+
+<div class="list" id="list">
+  <div class="empty">按上方「🔍 掃描」即時連線 DEX Screener API，<br>自動掃描 Solana 鏈熱門與新興迷因幣，<br>依六大指標評分並篩出高潛力標的。</div>
+</div>
+
+<div class="footbar">
+  <div class="info">數據源：<b>DEX Screener 公開 API</b>（即時）<br>評分：市值空間 · 流動性 · 換手率 · 買壓 · 動能 · 新鮮度</div>
+  <button class="btn" id="topBtn">↑ 頂部</button>
+</div>
+
+<script>
+"use strict";
+/* ══════════════════════════════════════════════
+   SOL 迷因雷達 — DEX Screener 即時分析
+   ══════════════════════════════════════════════ */
+
+const API = "https://api.dexscreener.com";
+const EXCLUDE = new Set([
+  "So11111111111111111111111111111111111111112", // wSOL
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // USDC
+  "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", // USDT
+]);
+
+let tokens = [];        // scored token list
+let currentFilter = "candidates";
+let autoTimer = null;
+let scanning = false;
+
+/* ───────── 工具 ───────── */
+const $ = id => document.getElementById(id);
+const fmtUsd = n => {
+  if (n == null || isNaN(n)) return "–";
+  if (n >= 1e9) return "$" + (n/1e9).toFixed(2) + "B";
+  if (n >= 1e6) return "$" + (n/1e6).toFixed(2) + "M";
+  if (n >= 1e3) return "$" + (n/1e3).toFixed(1) + "K";
+  return "$" + n.toFixed(0);
+};
+const fmtPrice = p => {
+  p = parseFloat(p);
+  if (!p || isNaN(p)) return "–";
+  if (p >= 1) return "$" + p.toLocaleString("en-US",{maximumFractionDigits:4});
+  const s = p.toFixed(20);
+  const m = s.match(/^0\.(0*)(\d{1,4})/);
+  if (m && m[1].length >= 4) return `$0.0<sub>${m[1].length}</sub>${m[2]}`;
+  return "$" + p.toPrecision(4);
+};
+const fmtAge = ms => {
+  if (!ms) return "未知";
+  const h = (Date.now() - ms) / 36e5;
+  if (h < 1) return Math.max(1,Math.round(h*60)) + " 分";
+  if (h < 24) return h.toFixed(1) + " 小時";
+  return (h/24).toFixed(1) + " 天";
+};
+const pctCls = v => v > 0 ? "pos" : v < 0 ? "neg" : "";
+const pctTxt = v => (v==null||isNaN(v)) ? "–" : (v>0?"+":"") + (Math.abs(v)>=100 ? v.toFixed(0) : v.toFixed(1)) + "%";
+const esc = s => String(s||"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+async function jget(url) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    const r = await fetch(url, { headers: { "Accept": "application/json" }, signal: ctrl.signal });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return await r.json();
+  } catch(e) {
+    if (e.name === "AbortError") throw new Error("連線逾時");
+    if (e instanceof TypeError) throw new Error("NETWORK_BLOCKED");
+    throw e;
+  } finally { clearTimeout(t); }
+}
+
+/* ───────── 資料收集 ─────────
+   1) token-boosts (top + latest) → Solana 地址
+   2) token-profiles latest      → Solana 地址
+   3) 熱門搜尋種子               → 補充樣本
+   4) 批次抓 pair 資料 (每批30)  */
+async function collectAddresses() {
+  const addrs = new Set();
+  const boostMap = {};
+  let fails = 0, blocked = 0;
+  const safe = url => jget(url).catch(e => { fails++; if (e.message==="NETWORK_BLOCKED") blocked++; return []; });
+  const [top, latest, profiles] = await Promise.all([
+    safe(API + "/token-boosts/top/v1"),
+    safe(API + "/token-boosts/latest/v1"),
+    safe(API + "/token-profiles/latest/v1"),
+  ]);
+  for (const arr of [top, latest, profiles]) {
+    if (!Array.isArray(arr)) continue;
+    for (const t of arr) {
+      if (t.chainId === "solana" && t.tokenAddress && !EXCLUDE.has(t.tokenAddress)) {
+        addrs.add(t.tokenAddress);
+        if (t.totalAmount) boostMap[t.tokenAddress] = (boostMap[t.tokenAddress]||0) + t.totalAmount;
+        else if (t.amount) boostMap[t.tokenAddress] = (boostMap[t.tokenAddress]||0) + t.amount;
+      }
+    }
+  }
+  return { addrs: [...addrs], boostMap, fails, blocked };
+}
+
+async function fetchPairsForAddresses(addrs) {
+  const pairs = [];
+  for (let i = 0; i < addrs.length; i += 30) {
+    const chunk = addrs.slice(i, i+30).join(",");
+    try {
+      const d = await jget(API + "/latest/dex/tokens/" + chunk);
+      if (d && Array.isArray(d.pairs)) pairs.push(...d.pairs);
+    } catch(e) { /* 跳過失敗批次 */ }
+  }
+  return pairs;
+}
+
+async function fetchSearchSeeds() {
+  // 用高流量種子詞補充 Solana 熱門對，擴大掃描面
+  const seeds = ["solana meme", "pump solana", "SOL"];
+  const out = []; let blocked = 0;
+  for (const q of seeds) {
+    try {
+      const d = await jget(API + "/latest/dex/search?q=" + encodeURIComponent(q));
+      if (d && Array.isArray(d.pairs)) out.push(...d.pairs);
+    } catch(e){ if (e.message==="NETWORK_BLOCKED") blocked++; }
+  }
+  return { pairs: out, blocked };
+}
+
+/* ───────── 評分引擎 ─────────
+   六大維度 → 0-100 分
+   S ≥ 78 / A ≥ 64 / B ≥ 50 / C < 50
+   「5x 潛力候選」= S 或 A 且無致命風險旗標 */
+function scoreToken(p, boost) {
+  const mcap = p.marketCap || p.fdv || 0;
+  const liq  = (p.liquidity && p.liquidity.usd) || 0;
+  const vol  = (p.volume && p.volume.h24) || 0;
+  const vol6 = (p.volume && p.volume.h6) || 0;
+  const ch = p.priceChange || {};
+  const h1 = parseFloat(ch.h1)||0, h6 = parseFloat(ch.h6)||0, h24 = parseFloat(ch.h24)||0, m5 = parseFloat(ch.m5)||0;
+  const tx24 = (p.txns && p.txns.h24) || {buys:0,sells:0};
+  const tx1  = (p.txns && p.txns.h1)  || {buys:0,sells:0};
+  const buys24 = tx24.buys||0, sells24 = tx24.sells||0;
+  const buys1 = tx1.buys||0, sells1 = tx1.sells||0;
+  const ageH = p.pairCreatedAt ? (Date.now()-p.pairCreatedAt)/36e5 : null;
+
+  const dims = {};   // 各維度得分
+  const flags = [];  // 標籤
+  let fatal = false; // 致命風險 → 排除候選
+
+  /* 1. 市值空間 (20) — 越小翻倍空間越大 */
+  let s1 = 0;
+  if (mcap > 0) {
+    if (mcap <= 1e6) s1 = 17;
+    else if (mcap <= 3e6) s1 = 20;
+    else if (mcap <= 10e6) s1 = 17;
+    else if (mcap <= 30e6) s1 = 11;
+    else if (mcap <= 100e6) s1 = 6;
+    else s1 = 2;
+  }
+  dims["市值空間"] = [s1, 20];
+
+  /* 2. 流動性健康 (15) */
+  let s2 = 0;
+  if (liq >= 20e3) {
+    if (liq >= 50e3 && liq <= 3e6) s2 = 10; else s2 = 6;
+    const lr = mcap > 0 ? liq / mcap : 0;
+    if (lr >= 0.05 && lr <= 0.6) s2 += 5;
+    else if (lr >= 0.02) s2 += 3;
+  }
+  if (liq < 15e3) { flags.push(["warn","⚠ 流動性極低"]); fatal = true; }
+  dims["流動性"] = [Math.min(s2,15), 15];
+
+  /* 3. 換手率動能 (20) — 24H量 / 市值 */
+  let s3 = 0;
+  const turnover = mcap > 0 ? vol / mcap : 0;
+  if (turnover >= 2) s3 = 20;
+  else if (turnover >= 1) s3 = 18;
+  else if (turnover >= 0.5) s3 = 14;
+  else if (turnover >= 0.2) s3 = 10;
+  else if (turnover >= 0.05) s3 = 5;
+  // 6H 量佔 24H 量比例高 = 動能加速
+  if (vol > 0 && vol6/vol > 0.4) s3 = Math.min(20, s3 + 2);
+  dims["換手動能"] = [s3, 20];
+
+  /* 4. 買盤壓力 (20) */
+  let s4 = 0;
+  const t24 = buys24 + sells24, t1 = buys1 + sells1;
+  const br24 = t24 > 0 ? buys24/t24 : 0.5;
+  const br1  = t1 > 0 ? buys1/t1 : 0.5;
+  s4 += Math.max(0, Math.min(10, (br24 - 0.45) * 100));
+  s4 += Math.max(0, Math.min(10, (br1 - 0.45) * 100));
+  if (t24 < 100) { s4 = Math.min(s4, 5); flags.push(["warn","交易稀少"]); }
+  if (br1 >= 0.62 && t1 > 50) flags.push(["good","🟢 買壓強勁"]);
+  if (br24 <= 0.38 && t24 > 200) flags.push(["warn","🔻 賣壓沉重"]);
+  dims["買盤壓力"] = [Math.round(s4), 20];
+
+  /* 5. 價格動能 (15) — 上升但未過熱 */
+  let s5 = 0;
+  if (h1 > 0) s5 += 4;
+  if (h6 > 0) s5 += 4;
+  if (h24 > -15 && h24 < 120) s5 += 4;
+  if (m5 > 0) s5 += 3;
+  if (h24 >= 250) { s5 = Math.max(0, s5 - 6); flags.push(["hot","🔥 已大漲 · 追高風險"]); }
+  if (h24 <= -45) { s5 = 0; flags.push(["warn","📉 24H 深跌"]); }
+  dims["價格動能"] = [s5, 15];
+
+  /* 6. 新鮮度 (10) — 1小時~14天最佳 */
+  let s6 = 0;
+  if (ageH != null) {
+    if (ageH < 1) { s6 = 3; flags.push(["warn","🐣 剛上線 · 極高風險"]); }
+    else if (ageH < 72) { s6 = 10; flags.push(["good","🌱 新上線"]); }
+    else if (ageH < 24*14) s6 = 8;
+    else if (ageH < 24*60) s6 = 5;
+    else s6 = 3;
+  } else s6 = 4;
+  dims["新鮮度"] = [s6, 10];
+
+  /* Boost 加成 (最多+5) */
+  let bonus = 0;
+  if (boost) { bonus = Math.min(5, Math.round(Math.log2(1+boost))); flags.push(["hot","⚡ 官方 Boost"]); }
+
+  let total = Object.values(dims).reduce((a,[v])=>a+v, 0) + bonus;
+  total = Math.max(0, Math.min(100, Math.round(total)));
+
+  const tier = total >= 78 ? "S" : total >= 64 ? "A" : total >= 50 ? "B" : "C";
+  const candidate = (tier === "S" || tier === "A") && !fatal && liq >= 25e3 && t24 >= 150;
+  if (candidate) flags.unshift(["good","⭐ 5x 潛力候選"]);
+
+  return { score: total, tier, dims, flags, candidate, bonus,
+           mcap, liq, vol, turnover, br24, br1, buys24, sells24, ageH };
+}
+
+/* ───────── pair → token 去重（取流動性最高的池） ───────── */
+function dedupePairs(pairs) {
+  const best = new Map();
+  for (const p of pairs) {
+    if (!p || p.chainId !== "solana") continue;
+    const addr = p.baseToken && p.baseToken.address;
+    if (!addr || EXCLUDE.has(addr)) continue;
+    const liq = (p.liquidity && p.liquidity.usd) || 0;
+    const prev = best.get(addr);
+    if (!prev || liq > ((prev.liquidity&&prev.liquidity.usd)||0)) best.set(addr, p);
+  }
+  return [...best.values()];
+}
+
+/* ───────── 主掃描流程 ───────── */
+async function runScan() {
+  if (scanning) return;
+  scanning = true;
+  $("scanBtn").disabled = true;
+  $("statusTxt").textContent = "連線 DEX Screener API 中…";
+  $("list").innerHTML = '<div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div>';
+
+  try {
+    const col = await collectAddresses();
+    const { addrs, boostMap } = col;
+    $("statusTxt").textContent = `取得 ${addrs.length} 個熱點地址，抓取交易對數據…`;
+
+    const [pairsA, seedRes] = await Promise.all([
+      fetchPairsForAddresses(addrs),
+      fetchSearchSeeds()
+    ]);
+    // 所有請求都被環境封鎖 → 顯示解法而不是「完成 0 筆」
+    if ((col.blocked >= 3 || (addrs.length === 0 && col.fails >= 3)) && seedRes.blocked >= 3) {
+      showBlockedHelp(); scanning = false; $("scanBtn").disabled = false; return;
+    }
+    const pairs = dedupePairs([...pairsA, ...seedRes.pairs]);
+    if (pairs.length === 0) {
+      $("list").innerHTML = '<div class="empty">API 有回應但沒有取得任何交易對，可能暫時限流。<br>請等 1–2 分鐘後再按「掃描」。</div>';
+      $("statusTxt").textContent = "無數據 · 請稍後重試";
+      scanning = false; $("scanBtn").disabled = false; return;
+    }
+
+    tokens = pairs.map(p => {
+      const a = scoreToken(p, boostMap[p.baseToken.address]);
+      return { pair: p, ...a };
+    })
+    .filter(t => t.mcap > 0 && t.liq > 5e3)
+    .sort((x,y) => y.score - x.score);
+
+    const cand = tokens.filter(t => t.candidate);
+    const totVol = tokens.reduce((a,t)=>a+t.vol,0);
+    $("stTotal").textContent = tokens.length;
+    $("stCand").textContent = cand.length;
+    $("stVol").textContent = fmtUsd(totVol);
+    $("stTime").textContent = new Date().toLocaleTimeString("zh-TW",{hour12:false,hour:"2-digit",minute:"2-digit"});
+    $("statusTxt").textContent = `掃描完成 · ${tokens.length} 個 SOL 代幣 · ${cand.length} 個候選`;
+    $("srcTxt").textContent = "api.dexscreener.com";
+    render();
+  } catch(e) {
+    const blocked = e.message === "NETWORK_BLOCKED";
+    $("list").innerHTML = blocked
+      ? `<div class="empty">⛔ 此預覽視窗封鎖了外部網路請求。<br><br><b style="color:var(--gold)">請下載本 HTML 檔，改用 Safari / Chrome 直接開啟</b>，<br>即可即時連線 DEX Screener API。</div>`
+      : `<div class="empty">連線失敗：${esc(e.message)}<br>DEX Screener API 可能暫時限流，請稍後再試。</div>`;
+    $("statusTxt").textContent = blocked ? "預覽沙盒封鎖網路 — 請下載後用瀏覽器開啟" : "掃描失敗";
+  }
+  scanning = false;
+  $("scanBtn").disabled = false;
+}
+
+/* ───────── 沙盒封鎖說明（手機解法） ───────── */
+function showBlockedHelp() {
+  $("statusTxt").textContent = "預覽沙盒封鎖外部網路";
+  $("list").innerHTML = `
+    <div class="empty" style="text-align:left;line-height:1.9">
+      <div style="text-align:center;font-size:30px;margin-bottom:8px">⛔</div>
+      <b style="color:var(--gold)">Claude 預覽視窗封鎖了對外網路</b>，只允許連 Anthropic 的伺服器，
+      所以永遠抓不到 DEX Screener 的數據。程式本身正常，換個環境開啟即可：<br><br>
+      <b style="color:var(--text)">📱 手機最快方案（免費架站，一次搞定）</b><br>
+      1️⃣ 先把本檔案傳到電腦（AirDrop / LINE / 郵件）<br>
+      2️⃣ 電腦開 <b style="color:var(--violet)">app.netlify.com/drop</b>，把 HTML 檔拖進去<br>
+      3️⃣ 立刻獲得一個網址 → 手機 Safari 開啟，即時掃描、60 秒自動更新全部可用<br><br>
+      <b style="color:var(--text)">💻 電腦直接用</b><br>
+      把檔案存到電腦，雙擊用 Chrome / Edge 開啟就能直接連線。
+    </div>`;
+}
+
+/* ───────── 單一代幣搜尋分析 ───────── */
+async function searchToken() {
+  const q = $("searchInput").value.trim();
+  if (!q) return;
+  $("statusTxt").textContent = `搜尋「${q}」…`;
+  $("list").innerHTML = '<div class="skel"></div>';
+  try {
+    const d = await jget(API + "/latest/dex/search?q=" + encodeURIComponent(q));
+    const pairs = dedupePairs((d && d.pairs) || []);
+    if (!pairs.length) {
+      $("list").innerHTML = `<div class="empty">在 Solana 鏈上找不到「${esc(q)}」。<br>可嘗試貼上完整合約地址。</div>`;
+      $("statusTxt").textContent = "無結果";
+      return;
+    }
+    tokens = pairs.map(p => ({ pair: p, ...scoreToken(p, 0) }))
+                  .sort((x,y) => ((y.liq)||0) - ((x.liq)||0))
+                  .slice(0, 15)
+                  .sort((x,y) => y.score - x.score);
+    currentFilter = "all";
+    document.querySelectorAll(".chip").forEach(c => c.classList.toggle("active", c.dataset.f === "all"));
+    $("statusTxt").textContent = `「${q}」分析結果 · ${tokens.length} 個代幣`;
+    render();
+  } catch(e) {
+    $("list").innerHTML = `<div class="empty">搜尋失敗：${esc(e.message)}</div>`;
+  }
+}
+
+/* ───────── 篩選 ───────── */
+function setFilter(el) {
+  currentFilter = el.dataset.f;
+  document.querySelectorAll(".chip").forEach(c => c.classList.remove("active","grn"));
+  el.classList.add("active");
+  if (currentFilter === "candidates") el.classList.add("grn");
+  render();
+}
+
+function filtered() {
+  switch (currentFilter) {
+    case "candidates": return tokens.filter(t => t.candidate);
+    case "fresh":     return tokens.filter(t => t.ageH != null && t.ageH < 72);
+    case "micro":     return tokens.filter(t => t.mcap > 0 && t.mcap < 3e6);
+    case "momentum":  return tokens.filter(t => {
+      const ch = t.pair.priceChange||{};
+      return (parseFloat(ch.h1)||0) > 3 && (parseFloat(ch.h6)||0) > 0;
+    });
+    default: return tokens;
+  }
+}
+
+/* ───────── 渲染 ───────── */
+function ringSvg(score, tier) {
+  const R = 24, C = 2*Math.PI*R;
+  const col = tier==="S" ? "var(--s-rank)" : tier==="A" ? "var(--a-rank)" : tier==="B" ? "var(--b-rank)" : "var(--c-rank)";
+  return `<svg width="56" height="56" viewBox="0 0 56 56">
+    <circle cx="28" cy="28" r="${R}" fill="none" stroke="var(--line)" stroke-width="5"/>
+    <circle cx="28" cy="28" r="${R}" fill="none" stroke="${col}" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-score/100)}"/>
+  </svg><div class="val" style="color:${col}">${score}</div>`;
+}
+
+function render() {
+  const arr = filtered();
+  if (!arr.length) {
+    $("list").innerHTML = tokens.length
+      ? '<div class="empty">此篩選條件下沒有符合的代幣。<br>試試切換到「全部」查看完整掃描結果。</div>'
+      : '<div class="empty">按上方「🔍 掃描」開始即時分析。</div>';
+    return;
+  }
+  $("list").innerHTML = arr.slice(0, 60).map((t, i) => {
+    const p = t.pair, bt = p.baseToken || {};
+    const ch = p.priceChange || {};
+    const h1 = parseFloat(ch.h1)||0, h6 = parseFloat(ch.h6)||0, h24 = parseFloat(ch.h24)||0;
+    const buyPct = (t.buys24+t.sells24)>0 ? t.buys24/(t.buys24+t.sells24)*100 : 50;
+    const dimRows = Object.entries(t.dims).map(([k,[v,max]]) => `
+      <div class="bar-row"><span>${k}</span>
+        <div class="bar-track"><div class="bar-fill ${t.tier==='S'?'g':''}" style="width:${(v/max*100).toFixed(0)}%"></div></div>
+        <em>${v}/${max}</em></div>`).join("");
+    return `
+    <div class="tk rank-${t.tier}" id="tk${i}">
+      <div class="tk-main" data-toggle="tk${i}">
+        <div class="tk-gauge">
+          <div class="ring">${ringSvg(t.score, t.tier)}</div>
+          <span class="tier ${t.tier}">${t.tier} 級</span>
+        </div>
+        <div class="tk-body">
+          <div class="tk-row1">
+            <div class="tk-name"><b>${esc(bt.symbol||"?")}</b><span>${esc(bt.name||"")}</span></div>
+            <div class="tk-price">${fmtPrice(p.priceUsd)}</div>
+          </div>
+          <div class="tk-row2">
+            <span class="pc ${pctCls(h1)}"><i>1H</i>${pctTxt(h1)}</span>
+            <span class="pc ${pctCls(h6)}"><i>6H</i>${pctTxt(h6)}</span>
+            <span class="pc ${pctCls(h24)}"><i>24H</i>${pctTxt(h24)}</span>
+          </div>
+          <div class="tk-row3">
+            <span class="pill">MCAP <b>${fmtUsd(t.mcap)}</b></span>
+            <span class="pill">LIQ <b>${fmtUsd(t.liq)}</b></span>
+            <span class="pill">VOL <b>${fmtUsd(t.vol)}</b></span>
+            <span class="pill">齡 <b>${fmtAge(p.pairCreatedAt)}</b></span>
+          </div>
+          ${t.flags.length ? `<div class="flags">${t.flags.map(([c,txt])=>`<span class="flag ${c}">${txt}</span>`).join("")}</div>` : ""}
+        </div>
+      </div>
+      <div class="tk-detail">
+        <div class="d-title">評分拆解 · 總分 ${t.score}/100${t.bonus?` （含 Boost +${t.bonus}）`:""}</div>
+        <div class="bars">${dimRows}</div>
+        <div class="buy-meter">
+          <div class="d-title" style="margin-bottom:6px">24H 買賣壓（${(t.buys24+t.sells24).toLocaleString()} 筆交易）</div>
+          <div class="bm-track"><div class="bm-buy" style="width:${buyPct.toFixed(1)}%"></div><div class="bm-sell" style="flex:1"></div></div>
+          <div class="bm-labels"><span class="b">買 ${t.buys24.toLocaleString()} (${buyPct.toFixed(0)}%)</span><span class="s">賣 ${t.sells24.toLocaleString()}</span></div>
+        </div>
+        <div class="d-grid">
+          <div class="d-cell"><span>換手率 (VOL/MCAP)</span><b>${(t.turnover*100).toFixed(0)}%</b></div>
+          <div class="d-cell"><span>流動性/市值</span><b>${t.mcap>0?(t.liq/t.mcap*100).toFixed(1):"–"}%</b></div>
+          <div class="d-cell"><span>1H 買單占比</span><b>${(t.br1*100).toFixed(0)}%</b></div>
+          <div class="d-cell"><span>DEX / 交易池</span><b style="font-size:11px">${esc(p.dexId||"?")}</b></div>
+        </div>
+        <div class="d-links">
+          <a class="gold" href="https://dexscreener.com/solana/${esc(p.pairAddress)}" target="_blank" rel="noopener">在 DEX Screener 開啟 ↗</a>
+          <a href="#" class="copy-ca" data-ca="${esc(bt.address)}">複製合約地址</a>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+/* ───────── 自動更新（每 60 秒） ───────── */
+function toggleAuto() {
+  if (autoTimer) {
+    clearInterval(autoTimer); autoTimer = null;
+    $("autoBtn").classList.remove("on");
+    $("autoDot").style.display = "none";
+    $("autoTxt").textContent = "自動 關";
+  } else {
+    autoTimer = setInterval(() => { if (!scanning) runScan(); }, 60000);
+    $("autoBtn").classList.add("on");
+    $("autoDot").style.display = "block";
+    $("autoTxt").textContent = "自動 60s";
+    if (!tokens.length) runScan();
+  }
+}
+
+/* ───────── 事件綁定（不用 inline onclick，避免被 CSP 擋掉） ───────── */
+function init() {
+  $("scanBtn").addEventListener("click", runScan);
+  $("autoBtn").addEventListener("click", toggleAuto);
+  $("searchBtn").addEventListener("click", searchToken);
+  $("topBtn").addEventListener("click", () => window.scrollTo({top:0,behavior:"smooth"}));
+  $("searchInput").addEventListener("keydown", e => { if (e.key === "Enter") searchToken(); });
+  document.querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => setFilter(c)));
+
+  // 卡片展開 / 複製 CA：事件委派
+  $("list").addEventListener("click", e => {
+    const copy = e.target.closest(".copy-ca");
+    if (copy) {
+      e.preventDefault();
+      const ca = copy.dataset.ca || "";
+      const done = () => { copy.textContent = "已複製 ✓"; setTimeout(()=>copy.textContent="複製合約地址",1500); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ca).then(done).catch(()=>fallbackCopy(ca,done));
+      else fallbackCopy(ca,done);
+      return;
+    }
+    if (e.target.closest("a")) return; // 外部連結不攔截
+    const main = e.target.closest(".tk-main");
+    if (main && main.dataset.toggle) {
+      const el = document.getElementById(main.dataset.toggle);
+      if (el) el.classList.toggle("open");
+    }
+  });
+
+  // 開頁自動掃描一次
+  runScan();
+}
+function fallbackCopy(text, done) {
+  const ta = document.createElement("textarea");
+  ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand("copy"); done(); } catch(e){}
+  document.body.removeChild(ta);
+}
+
+/* 全域錯誤可見化，避免「沒有任何反應」 */
+window.addEventListener("error", e => {
+  const s = $("statusTxt"); if (s) s.textContent = "腳本錯誤：" + (e.message || "未知");
+});
+
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+else init();
+
+</script>
+</body>
+</html>
