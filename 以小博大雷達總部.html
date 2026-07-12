@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASYM RADAR HQ・以小博大雷達總部</title>
+<style>
+:root{
+  --bg:#10151C; --panel:#161D26; --panel2:#1C2530;
+  --line:#26313E; --amber:#F0A830; --amber-dim:#8A6A2C;
+  --text:#D8DEE4; --dim:#7A8794; --green:#4CC38A; --red:#E5534B;
+  --mono:"IBM Plex Mono","Courier New",ui-monospace,monospace;
+  --sans:"PingFang TC","Microsoft JhengHei",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;font-size:14px}
+.wrap{max-width:1080px;margin:0 auto;padding:0 16px 80px}
+
+/* 掃描線氛圍 */
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:99;
+  background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(0,0,0,.08) 3px 4px)}
+
+header{border-bottom:1px solid var(--amber-dim);padding:26px 16px 18px;background:linear-gradient(180deg,#141B24,var(--bg))}
+.hd{max-width:1080px;margin:0 auto;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:10px}
+h1{font-family:var(--mono);font-size:clamp(19px,3.5vw,26px);color:var(--amber);letter-spacing:2px}
+h1 .zh{color:var(--text);font-family:var(--sans);font-size:.75em;margin-left:10px;letter-spacing:4px}
+.status{font-family:var(--mono);font-size:11.5px;color:var(--dim)}
+.status .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);margin-right:6px;animation:blink 2s infinite}
+@keyframes blink{50%{opacity:.3}}
+
+.disclaimer{font-size:12px;color:var(--dim);border:1px dashed var(--line);padding:8px 14px;margin:14px 0 0;line-height:1.6}
+.disclaimer b{color:var(--amber)}
+
+/* tabs */
+.tabs{display:flex;gap:2px;margin:22px 0 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.tabs button{
+  background:var(--panel);border:1px solid var(--line);border-bottom:none;
+  color:var(--dim);padding:10px 18px;font-size:13.5px;cursor:pointer;font-family:var(--sans);letter-spacing:1px;
+}
+.tabs button.active{background:var(--panel2);color:var(--amber);border-color:var(--amber-dim);border-bottom:1px solid var(--panel2);margin-bottom:-1px}
+.pane{display:none;background:var(--panel2);border:1px solid var(--line);border-top:none;padding:18px}
+.pane.active{display:block}
+.pane-desc{font-size:13px;color:var(--dim);margin-bottom:12px}
+.pane-desc b{color:var(--text)}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.toolbar button{background:var(--amber);color:#10151C;border:none;padding:8px 18px;font-family:var(--mono);font-size:13px;cursor:pointer;letter-spacing:1px;font-weight:600}
+.toolbar button:disabled{background:var(--amber-dim);cursor:wait}
+.toolbar select,.toolbar input{background:var(--panel);border:1px solid var(--line);color:var(--text);padding:7px 10px;font-size:13px;font-family:var(--mono)}
+.toolbar .ts{font-family:var(--mono);font-size:11px;color:var(--dim);margin-left:auto}
+
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font-family:var(--mono);font-size:11px;color:var(--amber);text-align:right;padding:8px 10px;border-bottom:1px solid var(--amber-dim);letter-spacing:1px;white-space:nowrap;cursor:pointer}
+th:first-child,td:first-child{text-align:left}
+td{padding:9px 10px;border-bottom:1px solid var(--line);font-family:var(--mono);text-align:right;white-space:nowrap}
+td.name{font-family:var(--sans);text-align:left}
+td .sub{color:var(--dim);font-size:11px;display:block;font-family:var(--mono)}
+tr.item{cursor:pointer}
+tr.item:hover td{background:rgba(240,168,48,.05)}
+.pos{color:var(--green)} .neg{color:var(--red)} .amber{color:var(--amber)}
+.score-bar{display:inline-block;height:8px;background:var(--amber);vertical-align:middle;margin-right:6px;box-shadow:0 0 6px rgba(240,168,48,.5)}
+
+tr.detail td{background:var(--panel);text-align:left;font-family:var(--sans);white-space:normal;padding:14px 18px;border-left:3px solid var(--amber)}
+.an h5{color:var(--amber);font-family:var(--mono);font-size:12px;letter-spacing:2px;margin:10px 0 4px}
+.an h5:first-child{margin-top:0}
+.an p,.an li{font-size:13px;color:var(--text)}
+.an ul{padding-left:18px}
+.an .risk{color:var(--red)}
+.an .act{color:var(--green)}
+
+.loading,.error{padding:30px;text-align:center;color:var(--dim);font-family:var(--mono);font-size:13px}
+.error{color:var(--red)}
+.error small{display:block;color:var(--dim);margin-top:8px}
+
+/* 框架頁 */
+.fw{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:760px){.fw{grid-template-columns:1fr}}
+.fw-card{background:var(--panel);border:1px solid var(--line);padding:16px 18px}
+.fw-card h4{color:var(--amber);font-family:var(--mono);font-size:13px;letter-spacing:2px;margin-bottom:8px}
+.fw-card ol,.fw-card ul{padding-left:18px;font-size:13px}
+.fw-card li{margin-bottom:5px}
+.fw-card code{background:#0C1116;color:var(--amber);padding:1px 6px;font-size:12px}
+.fw-card p{font-size:13px}
+pre{background:#0C1116;border:1px solid var(--line);padding:12px;font-size:11.5px;overflow-x:auto;color:#9FB0BE;margin-top:8px;line-height:1.5}
+@media(max-width:640px){
+  td .sub{display:none}
+  th,td{padding:7px 6px;font-size:12px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hd">
+    <h1>⟁ ASYM RADAR HQ<span class="zh">以小博大雷達總部</span></h1>
+    <div class="status"><span class="dot"></span>DATA: DeFiLlama / CoinGecko / Binance(公開API・免金鑰)</div>
+  </div>
+  <div class="wrap" style="padding-bottom:0">
+    <div class="disclaimer"><b>雷達的誠實邊界:</b>本站掃描的是「結構性訊號」——未發幣高TVL協議、跌深+量能回流、資金費率極端值。這些是<b>候選名單,不是買單</b>;分析採情境框架(什麼條件下會走哪個劇本),沒有人能預言價格。單筆投入依槓鈴策略上限,推播給他人時保留本聲明。</div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="tabs">
+    <button class="active" onclick="showTab('airdrop',this)">🪂 空投雷達</button>
+    <button onclick="showTab('dip',this)">📉 跌深掃描</button>
+    <button onclick="showTab('funding',this)">⚖ 資金費率極端值</button>
+    <button onclick="showTab('framework',this)">🧭 分析框架＋推播</button>
+  </div>
+
+  <!-- 空投雷達 -->
+  <div class="pane active" id="pane-airdrop">
+    <p class="pane-desc"><b>邏輯:</b>「有高 TVL 但還沒發幣」的協議 = 最可能用空投回饋早期用戶(Uniswap/Arbitrum/Hyperliquid 前例)。分數 = TVL 規模 + 7日資金流向 + 類別前例加權(Perp/DEX/Bridge/Restaking 空投史最豐)。點任一列展開行動分析。</p>
+    <div class="toolbar">
+      <button onclick="loadAirdrop()" id="btnAir">SCAN ▸</button>
+      <select id="airTvl" onchange="renderAirdrop()">
+        <option value="10">TVL > $10M</option>
+        <option value="50" selected>TVL > $50M</option>
+        <option value="200">TVL > $200M</option>
+      </select>
+      <span class="ts" id="tsAir"></span>
+    </div>
+    <div id="airBox"><div class="loading">按 SCAN 開始掃描(需在本機瀏覽器開啟,Claude 預覽視窗會擋外部連線)</div></div>
+  </div>
+
+  <!-- 跌深掃描 -->
+  <div class="pane" id="pane-dip">
+    <p class="pane-desc"><b>邏輯:</b>掃市值前 250 大,找「距歷史高點跌深 ≥70% + 成交量/市值比回升 + 7日動能轉正」的標的——跌深不等於低估(LUNA 跌深後照樣歸零),量能回流+動能轉正才代表有人在接。這是名單,之後要自己過三題測試。</p>
+    <div class="toolbar">
+      <button onclick="loadDip()" id="btnDip">SCAN ▸</button>
+      <select id="dipMode" onchange="renderDip()">
+        <option value="recover" selected>跌深回穩(DD≥70%・量比>6%・7日轉正)</option>
+        <option value="deep">極端跌深(DD≥85%・仍有量)</option>
+        <option value="momo">動能領先(7日漲幅Top・排除meme波動股)</option>
+      </select>
+      <span class="ts" id="tsDip"></span>
+    </div>
+    <div id="dipBox"><div class="loading">按 SCAN 開始掃描</div></div>
+  </div>
+
+  <!-- 資金費率 -->
+  <div class="pane" id="pane-funding">
+    <p class="pane-desc"><b>邏輯:</b>永續合約資金費率極端 = 單邊擁擠。<b>極端正費率</b>=多頭擁擠(空方收費率/擠壓風險,對應你問的「空頭機會」);<b>極端負費率</b>=空頭擁擠(軋空燃料)。也可做 delta 中性套利(現貨多+永續空收費率)——接你 fundscan 的老本行。</p>
+    <div class="toolbar">
+      <button onclick="loadFunding()" id="btnFun">SCAN ▸</button>
+      <span class="ts" id="tsFun"></span>
+    </div>
+    <div id="funBox"><div class="loading">按 SCAN 開始掃描(部分網路環境 Binance API 可能擋 CORS,失敗會顯示替代方案)</div></div>
+  </div>
+
+  <!-- 框架 -->
+  <div class="pane" id="pane-framework">
+    <div class="fw">
+      <div class="fw-card">
+        <h4>▸ 三題測試(任何機會先過這關)</h4>
+        <ol>
+          <li>期望值為正嗎?(結構上誰付錢給誰?)</li>
+          <li>最壞情況我付得起嗎?(單筆 ≤ 總資產 1~2%)</li>
+          <li><b>對方為什麼要讓我賺?</b>(空投=協議買用戶;費率套利=賺擁擠者的保費;答不出來=你是出口流動性)</li>
+        </ol>
+      </div>
+      <div class="fw-card">
+        <h4>▸ 情境框架(取代「預測」)</h4>
+        <p>每個標的展開後的分析都是三劇本結構:</p>
+        <ul>
+          <li><b>牛劇本</b>:什麼條件成立會漲(敘事點火+量能持續)</li>
+          <li><b>熊劇本</b>:什麼條件成立會續跌(量縮+解鎖賣壓)</li>
+          <li><b>觀察鍵</b>:盯哪個指標決定劇本切換</li>
+        </ul>
+        <p style="color:var(--dim);font-size:12px;margin-top:6px">預測未來不可能;定義「什麼情況下我做什麼」完全可能——這才是可推播、可被檢驗的分析。</p>
+      </div>
+      <div class="fw-card">
+        <h4>▸ 部位紀律(槓鈴接口)</h4>
+        <ul>
+          <li>本雷達所有機會 ∈ 槓鈴「瘋狂側」,總上限資產 5~10%</li>
+          <li>空投農場:單協議互動成本封頂、5~10 協議分散</li>
+          <li>跌深標的:單筆 ≤1%,分 3 批進,跌破前低停損</li>
+          <li>費率套利:delta 中性才叫套利,單邊裸空不是</li>
+          <li>任何 10 倍以上獲利:當日搬 70% 回核心側(0050)</li>
+        </ul>
+      </div>
+      <div class="fw-card">
+        <h4>▸ Telegram 推播(接你的 VPS)</h4>
+        <p>同捆的 <code>asym_radar.py</code> 每日排程掃同樣三個訊號源,格式化成日報推給你的頻道/群組:</p>
+        <pre>pip install requests
+# 填入 BOT_TOKEN / CHAT_ID 後:
+python3 asym_radar.py        # 手動測試
+# cron 每天 08:30 推播:
+30 8 * * * /usr/bin/python3 /home/you/asym_radar.py</pre>
+        <p style="font-size:12px;color:var(--dim)">日報自動附免責聲明。推給別人前先自己跟單一個月,用紀錄說話——「若消息準確」是驗證出來的,不是宣稱出來的。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================= 通用 ================= */
+function showTab(id,btn){
+  document.querySelectorAll(".pane").forEach(p=>p.classList.remove("active"));
+  document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));
+  document.getElementById("pane-"+id).classList.add("active");
+  btn.classList.add("active");
+}
+const fmtUsd=n=>{
+  if(n>=1e9)return "$"+(n/1e9).toFixed(2)+"B";
+  if(n>=1e6)return "$"+(n/1e6).toFixed(1)+"M";
+  if(n>=1e3)return "$"+(n/1e3).toFixed(0)+"K";
+  return "$"+(+n).toPrecision(3);
+};
+const pct=(n,d=1)=>n==null?"—":(n>0?"+":"")+n.toFixed(d)+"%";
+const cls=n=>n>0?"pos":n<0?"neg":"";
+const now=()=>"UPDATED "+new Date().toLocaleTimeString("zh-TW",{hour12:false});
+function toggleDetail(id){
+  const el=document.getElementById(id);
+  if(el) el.style.display=el.style.display==="none"?"table-row":"none";
+}
+
+/* ================= 🪂 空投雷達 ================= */
+let airData=[];
+const AIR_CAT_BONUS={"Dexs":12,"Derivatives":15,"Bridge":12,"Restaking":12,"Lending":8,"Liquid Staking":8,"Yield":6,"CDP":6,"Perps":15,"Chain":10};
+async function loadAirdrop(){
+  const btn=document.getElementById("btnAir");btn.disabled=true;btn.textContent="SCANNING…";
+  const box=document.getElementById("airBox");
+  box.innerHTML='<div class="loading">▸ 掃描 DeFiLlama 全協議清單(約 5,000+ 協議)…</div>';
+  try{
+    const r=await fetch("https://api.llama.fi/protocols");
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    const all=await r.json();
+    airData=all.filter(p=>(p.symbol==="-"||!p.symbol)&&p.tvl>1e7&&p.category!=="CEX")
+      .map(p=>{
+        const catBonus=AIR_CAT_BONUS[p.category]||0;
+        const flow=Math.max(-20,Math.min(50,p.change_7d||0));
+        const score=Math.round(Math.log10(p.tvl)*10+flow*0.6+catBonus);
+        return {...p,score};
+      }).sort((a,b)=>b.score-a.score);
+    document.getElementById("tsAir").textContent=now();
+    renderAirdrop();
+  }catch(e){
+    box.innerHTML=`<div class="error">✕ 連線失敗:${e.message}<small>請確認在本機瀏覽器開啟(非 Claude 預覽)、網路可達 api.llama.fi。</small></div>`;
+  }
+  btn.disabled=false;btn.textContent="RESCAN ▸";
+}
+function airAnalysis(p){
+  const precedent={"Derivatives":"Perp/衍生品是空投最大方的類別:dYdX、Hyperliquid 前例,早期交易量用戶獲配豐厚","Perps":"Perp/衍生品是空投最大方的類別:dYdX、Hyperliquid 前例","Dexs":"DEX 空投鼻祖類別:Uniswap 每人 400 UNI 起家","Bridge":"跨鏈橋前例:Arbitrum/Optimism 對橋接用戶大量配發","Restaking":"再質押敘事:EigenLayer 積分模式帶起的空投農場主戰場","Lending":"借貸協議通常按存借量計分","Liquid Staking":"質押協議按質押量與時間計分"}[p.category]||"此類別空投前例較少,配置權重放低";
+  const flow7=p.change_7d||0;
+  return `<div class="an">
+    <h5>▸ 結構訊號</h5>
+    <p>TVL ${fmtUsd(p.tvl)}(未發幣協議中的資金規模即談判籌碼)・7日資金流 <span class="${cls(flow7)}">${pct(flow7)}</span> ${flow7>10?"——資金正在搶跑,可能已有空投預期":flow7<-10?"——資金流出中,熱度退潮":"——平穩"}・鏈:${(p.chains||[]).slice(0,4).join(", ")}</p>
+    <h5>▸ 類別前例</h5><p>${precedent}</p>
+    <h5>▸ 三劇本</h5>
+    <ul><li><b>牛:</b>官宣代幣/積分計畫 → 早期互動用戶獲配(歷史中位數常見數百~數千美元)</li>
+    <li><b>熊:</b>始終不發幣、或發幣但排除小額用戶(女巫過濾誤傷)→ 損失=互動成本(gas+時間)</li>
+    <li><b>觀察鍵:</b>官方是否推出積分(points)系統——積分上線=發幣訊號最強前兆</li></ul>
+    <h5 class="act">▸ 行動</h5>
+    <p class="act">用專用小錢包做真實互動(小額入金/交易/跨鏈),每週 1 次保持活躍;成本封頂 $50~100/協議。</p>
+    <p class="risk">⚠ 風險:互動合約前確認官網網址(釣魚是最大損失來源);別為農空投存大額資金進未審計協議。</p>
+  </div>`;
+}
+function renderAirdrop(){
+  const min=+document.getElementById("airTvl").value*1e6;
+  const list=airData.filter(p=>p.tvl>=min).slice(0,40);
+  if(!list.length){document.getElementById("airBox").innerHTML='<div class="loading">無符合條件協議,降低 TVL 門檻試試</div>';return;}
+  const maxS=list[0].score;
+  document.getElementById("airBox").innerHTML=`<table>
+    <tr><th>協議(點擊展開分析)</th><th>類別</th><th>TVL</th><th>1D</th><th>7D 資金流</th><th>雷達分</th></tr>
+    ${list.map((p,i)=>`
+      <tr class="item" onclick="toggleDetail('air-${i}')">
+        <td class="name">${p.name}<span class="sub">${(p.chains||[])[0]||""}</span></td>
+        <td>${p.category||"—"}</td>
+        <td>${fmtUsd(p.tvl)}</td>
+        <td class="${cls(p.change_1d)}">${pct(p.change_1d)}</td>
+        <td class="${cls(p.change_7d)}">${pct(p.change_7d)}</td>
+        <td class="amber"><span class="score-bar" style="width:${Math.max(6,p.score/maxS*56)}px"></span>${p.score}</td>
+      </tr>
+      <tr class="detail" id="air-${i}" style="display:none"><td colspan="6">${airAnalysis(p)}</td></tr>`).join("")}
+  </table>`;
+}
+
+/* ================= 📉 跌深掃描 ================= */
+let dipData=[];
+async function loadDip(){
+  const btn=document.getElementById("btnDip");btn.disabled=true;btn.textContent="SCANNING…";
+  const box=document.getElementById("dipBox");
+  box.innerHTML='<div class="loading">▸ 掃描 CoinGecko 市值前 250…</div>';
+  try{
+    const r=await fetch("https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1&price_change_percentage=7d%2C30d");
+    if(!r.ok)throw new Error("HTTP "+r.status+(r.status===429?"(頻率限制,等 1 分鐘再掃)":""));
+    dipData=(await r.json()).map(c=>({
+      ...c,
+      dd:c.ath_change_percentage,
+      volR:c.market_cap>0?c.total_volume/c.market_cap*100:0,
+      p7:c.price_change_percentage_7d_in_currency,
+      p30:c.price_change_percentage_30d_in_currency
+    }));
+    document.getElementById("tsDip").textContent=now();
+    renderDip();
+  }catch(e){
+    box.innerHTML=`<div class="error">✕ 連線失敗:${e.message}<small>CoinGecko 免費 API 有頻率限制;請在本機瀏覽器開啟。</small></div>`;
+  }
+  btn.disabled=false;btn.textContent="RESCAN ▸";
+}
+function dipAnalysis(c){
+  const stable=["usdt","usdc","dai","fdusd","usde","tusd","usds","pyusd"].includes(c.symbol);
+  if(stable)return `<div class="an"><p>穩定幣,略過。</p></div>`;
+  return `<div class="an">
+    <h5>▸ 結構訊號</h5>
+    <p>距 ATH <span class="neg">${c.dd.toFixed(0)}%</span>・量/市值比 <span class="amber">${c.volR.toFixed(1)}%</span>${c.volR>15?"(換手極活躍——多空正在激烈交手)":c.volR>6?"(量能健康)":"(量縮——反彈缺燃料)"}・7日 <span class="${cls(c.p7)}">${pct(c.p7)}</span>・30日 <span class="${cls(c.p30)}">${pct(c.p30)}</span>・市值排名 #${c.market_cap_rank}</p>
+    <h5>▸ 三劇本</h5>
+    <ul>
+      <li><b>牛:</b>量能維持 + 站回 30 日高 → 跌深反彈常見 50~150%(從深坑反彈的%數天生就大)</li>
+      <li><b>熊:</b>反彈量縮 + 破前低 → 跌深股再腰斬的例子同樣多(LUNA/FTT 教訓:跌 90% 後還能再跌 90%)</li>
+      <li><b>觀察鍵:</b>量/市值比是否守住 5% 以上;跌破近 30 日低點 = 熊劇本確認,無條件出場</li>
+    </ul>
+    <h5 class="act">▸ 行動(若過三題測試)</h5>
+    <p class="act">單筆 ≤ 總資產 1%,分 3 批;進場同時設好停損(前低)。查代幣解鎖表(tokenomist)確認近 3 個月無巨量解鎖。</p>
+    <p class="risk">⚠ 跌深 ≠ 低估:先查它為什麼跌(駭客?監管?解鎖?團隊跑路?)——原因還在,劇本就只有熊。</p>
+  </div>`;
+}
+function renderDip(){
+  const mode=document.getElementById("dipMode").value;
+  const stable=["usdt","usdc","dai","fdusd","usde","tusd","usds","pyusd","weth","wbtc","steth","wsteth","weeth","cbbtc"];
+  let list=dipData.filter(c=>!stable.includes(c.symbol)&&c.dd!=null);
+  if(mode==="recover") list=list.filter(c=>c.dd<=-70&&c.volR>6&&(c.p7||0)>0).sort((a,b)=>b.volR-a.volR);
+  else if(mode==="deep") list=list.filter(c=>c.dd<=-85&&c.volR>3).sort((a,b)=>a.dd-b.dd);
+  else list=list.filter(c=>(c.p7||0)>0).sort((a,b)=>(b.p7||0)-(a.p7||0));
+  list=list.slice(0,30);
+  const box=document.getElementById("dipBox");
+  if(!list.length){box.innerHTML='<div class="loading">此模式目前無符合標的——市場沒機會時,空手也是部位。</div>';return;}
+  box.innerHTML=`<table>
+    <tr><th>幣種(點擊展開分析)</th><th>價格</th><th>距ATH</th><th>量/市值</th><th>7D</th><th>30D</th></tr>
+    ${list.map((c,i)=>`
+      <tr class="item" onclick="toggleDetail('dip-${i}')">
+        <td class="name">${c.name}<span class="sub">${c.symbol.toUpperCase()}・#${c.market_cap_rank}</span></td>
+        <td>$${c.current_price<1?c.current_price.toPrecision(3):c.current_price.toLocaleString()}</td>
+        <td class="neg">${c.dd.toFixed(0)}%</td>
+        <td class="amber">${c.volR.toFixed(1)}%</td>
+        <td class="${cls(c.p7)}">${pct(c.p7)}</td>
+        <td class="${cls(c.p30)}">${pct(c.p30)}</td>
+      </tr>
+      <tr class="detail" id="dip-${i}" style="display:none"><td colspan="6">${dipAnalysis(c)}</td></tr>`).join("")}
+  </table>`;
+}
+
+/* ================= ⚖ 資金費率 ================= */
+async function loadFunding(){
+  const btn=document.getElementById("btnFun");btn.disabled=true;btn.textContent="SCANNING…";
+  const box=document.getElementById("funBox");
+  box.innerHTML='<div class="loading">▸ 掃描 Binance 永續全市場費率…</div>';
+  try{
+    const r=await fetch("https://fapi.binance.com/fapi/v1/premiumIndex");
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    const all=(await r.json()).filter(x=>x.symbol.endsWith("USDT")&&x.lastFundingRate!==undefined)
+      .map(x=>({sym:x.symbol.replace("USDT",""),fr:+x.lastFundingRate*100,apr:+x.lastFundingRate*3*365*100,price:+x.markPrice}))
+      .sort((a,b)=>Math.abs(b.fr)-Math.abs(a.fr)).slice(0,25);
+    document.getElementById("tsFun").textContent=now();
+    box.innerHTML=`<table>
+      <tr><th>合約(點擊展開)</th><th>標記價</th><th>當期費率(8h)</th><th>年化</th><th>訊號</th></tr>
+      ${all.map((x,i)=>{
+        const sig=x.fr>0.1?"多頭極擁擠":x.fr>0.03?"多頭偏擠":x.fr<-0.1?"空頭極擁擠":x.fr<-0.03?"空頭偏擠":"中性";
+        return `<tr class="item" onclick="toggleDetail('fun-${i}')">
+          <td class="name">${x.sym}</td>
+          <td>$${x.price<1?x.price.toPrecision(3):x.price.toLocaleString()}</td>
+          <td class="${cls(x.fr)}">${pct(x.fr,4)}</td>
+          <td class="${cls(x.apr)}">${pct(x.apr,0)}</td>
+          <td class="${x.fr>0.03?"neg":x.fr<-0.03?"pos":""}">${sig}</td>
+        </tr>
+        <tr class="detail" id="fun-${i}" style="display:none"><td colspan="5"><div class="an">
+          <h5>▸ 解讀</h5>
+          <p>${x.fr>0.03?`正費率年化 ${x.apr.toFixed(0)}%:多頭付錢給空頭。<b>套利劇本</b>:現貨買入+永續等額做空(delta中性),坐收費率——這是你 fundscan 的菜。<b>擠壓劇本</b>:擁擠多頭遇急跌會連環清算,裸多此時風險最高。`
+          :x.fr<-0.03?`負費率:空頭付錢給多頭,市場恐慌性看空。<b>軋空劇本</b>:負費率+價格止跌=空頭回補燃料充足。<b>套利劇本</b>:做多現貨對沖收負費率(操作較繞)。`
+          :`費率中性,無擁擠訊號,略過。`}</p>
+          <h5 class="risk">▸ 風險</h5>
+          <p class="risk">費率每 8 小時重算,套利年化是「此刻快照」非保證;delta 中性仍有交易所風險與強平價差風險,槓桿 ≤2x。</p>
+        </div></td></tr>`;}).join("")}
+    </table>`;
+  }catch(e){
+    box.innerHTML=`<div class="error">✕ Binance API 連線失敗:${e.message}<small>部分網路環境會擋 fapi.binance.com 的瀏覽器請求。替代方案:用同捆的 asym_radar.py 在 VPS 上抓(伺服器端無 CORS 限制),或到 CoinGlass 網站看全市場費率熱圖。</small></div>`;
+  }
+  btn.disabled=false;btn.textContent="RESCAN ▸";
+}
+</script>
+</body>
+</html>
