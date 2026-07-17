@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>幼鯨雷達 · WHALE NURSERY RADAR · Solana</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&family=Unbounded:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   幼鯨雷達 v1.0 — 少年期鯨魚獵場
+   與 sol-meme-radar(嬰兒房)/ sol-meme-bot(VPS)完全獨立:
+   純前端、無後端、無共用儲存。
+   ⚠ 部署到 GitHub Pages 後若要跨次持久化,可自行把
+     memStore 換成 localStorage(搜尋 "STORAGE-SWAP" 註解)。
+   ============================================================ */
+:root{
+  --abyss:#04070d; --deep:#081120; --panel:#0c1728; --panel2:#101f35;
+  --line:#1b2d47; --ink:#e6f1f8; --dim:#7d93a8; --faint:#4a5f74;
+  --lumen:#3fe8cf;        /* 生物螢光青 — 主色 */
+  --lumen-soft:rgba(63,232,207,.14);
+  --sonar:#57b6ff; --amber:#ffb454; --danger:#ff5d7a; --gold:#ffd47e;
+  --mono:'IBM Plex Mono',monospace; --tc:'Noto Sans TC',sans-serif; --disp:'Unbounded',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--abyss);color:var(--ink);font-family:var(--tc);font-size:15px;
+  background-image:radial-gradient(1200px 500px at 70% -10%, rgba(87,182,255,.07), transparent 60%),
+                   radial-gradient(900px 600px at 10% 110%, rgba(63,232,207,.05), transparent 55%);
+  min-height:100vh}
+.wrap{max-width:860px;margin:0 auto;padding:18px 14px 90px}
+a{color:var(--sonar)}
+
+/* ---- header ---- */
+header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px}
+.brand h1{font-size:26px;font-weight:700;letter-spacing:.5px}
+.brand h1 .cn{color:var(--ink)} .brand h1 .hl{color:var(--lumen)}
+.brand .en{font-family:var(--disp);font-size:10.5px;letter-spacing:3px;color:var(--dim);margin-top:4px}
+.brand .en b{color:var(--gold);font-weight:700}
+.brand .sub{font-size:12px;color:var(--faint);margin-top:6px}
+.scanbtn{background:linear-gradient(160deg,#123147,#0b1f33);border:1px solid var(--lumen);
+  color:var(--lumen);font-family:var(--tc);font-weight:700;font-size:15px;border-radius:14px;
+  padding:14px 20px;cursor:pointer;box-shadow:0 0 18px rgba(63,232,207,.15);white-space:nowrap}
+.scanbtn:disabled{opacity:.45;cursor:wait}
+.scanbtn.small{padding:9px 14px;font-size:13.5px;border-radius:10px}
+
+/* ---- tabs ---- */
+.tabs{display:flex;gap:8px;margin:14px 0}
+.tab{flex:1;text-align:center;padding:12px 6px;border-radius:12px;border:1px solid var(--line);
+  background:var(--panel);color:var(--dim);font-weight:500;cursor:pointer;font-size:14.5px}
+.tab.on{border-color:var(--lumen);color:var(--lumen);background:linear-gradient(160deg,#0d2438,#0b1a2c);
+  box-shadow:0 0 14px rgba(63,232,207,.12)}
+
+/* ---- stat row ---- */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 10px}
+.stat b{display:block;font-family:var(--mono);font-size:20px;color:var(--ink)}
+.stat b.hl{color:var(--lumen)} .stat b.gd{color:var(--gold)}
+.stat span{font-size:11.5px;color:var(--dim)}
+
+/* ---- params ---- */
+.params{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:14px}
+.params h4{font-size:12.5px;color:var(--dim);margin-bottom:8px;font-weight:500}
+.pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pgrid label{font-size:11px;color:var(--faint);display:block;margin-bottom:3px}
+.pgrid input{width:100%;background:var(--deep);border:1px solid var(--line);border-radius:8px;
+  color:var(--ink);font-family:var(--mono);font-size:13.5px;padding:8px}
+
+/* ---- cards ---- */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px;position:relative;overflow:hidden}
+.card.sGrade{border-color:var(--lumen);box-shadow:0 0 22px rgba(63,232,207,.12)}
+.chead{display:flex;gap:14px;align-items:flex-start}
+.ring{width:74px;flex:none;text-align:center}
+.ring svg{display:block;margin:0 auto}
+.ring .grade{display:inline-block;margin-top:5px;font-size:11.5px;font-weight:700;padding:2px 10px;border-radius:7px;border:1px solid}
+.g-S{color:var(--lumen);border-color:var(--lumen);background:var(--lumen-soft)}
+.g-A{color:#8be99a;border-color:#2f6b46}
+.g-B{color:var(--sonar);border-color:#274d75}
+.g-C{color:var(--amber);border-color:#6b4d24}
+.g-D{color:var(--danger);border-color:#6b2438}
+.cbody{flex:1;min-width:0}
+.cname{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.cname b{font-size:18px} .cname .sym{color:var(--dim);font-size:13px}
+.cname .price{margin-left:auto;font-family:var(--mono);font-size:16px;font-weight:600}
+.chg{font-family:var(--mono);font-size:12.5px;margin-top:3px;color:var(--dim)}
+.up{color:#57e389}.dn{color:var(--danger)}
+.kpis{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.kpi{background:var(--deep);border:1px solid var(--line);border-radius:8px;padding:5px 9px;
+  font-family:var(--mono);font-size:12.5px;color:var(--ink)}
+.kpi em{font-style:normal;color:var(--faint);font-family:var(--tc);font-size:11px;margin-right:4px}
+.badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+.badge{font-size:11.5px;padding:3px 9px;border-radius:7px;border:1px solid}
+.b-warn{color:var(--amber);border-color:#6b4d24;background:rgba(255,180,84,.08)}
+.b-bad{color:var(--danger);border-color:#6b2438;background:rgba(255,93,122,.08)}
+.b-ok{color:var(--lumen);border-color:#1f5b52;background:var(--lumen-soft)}
+.b-info{color:var(--sonar);border-color:#274d75;background:rgba(87,182,255,.08)}
+
+/* ---- 成長帶(signature)---- */
+.gband{margin-top:12px}
+.gband .axis{position:relative;height:14px;border-radius:7px;overflow:hidden;
+  background:linear-gradient(90deg,
+    rgba(255,93,122,.30) 0%, rgba(255,93,122,.18) 10%,
+    rgba(63,232,207,.34) 10%, rgba(63,232,207,.34) 70%,
+    rgba(255,180,84,.26) 70%, rgba(255,180,84,.26) 100%)}
+.gband .whale{position:absolute;top:50%;transform:translate(-50%,-54%);font-size:13px;
+  filter:drop-shadow(0 0 5px rgba(63,232,207,.9))}
+.gband .lbls{display:flex;justify-content:space-between;font-size:10px;color:var(--faint);margin-top:3px}
+.gband .lbls .sweet{color:var(--lumen)}
+
+/* ---- score breakdown ---- */
+.brk{margin-top:11px;border-top:1px dashed var(--line);padding-top:10px;display:none}
+.card.open .brk{display:block}
+.brow{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.brow span{width:82px;flex:none;font-size:12px;color:var(--dim)}
+.brow .bar{flex:1;height:7px;background:var(--deep);border-radius:4px;overflow:hidden}
+.brow .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--sonar),var(--lumen));border-radius:4px}
+.brow b{width:46px;text-align:right;font-family:var(--mono);font-size:12px;font-weight:600}
+.rug{margin-top:8px;font-size:12.5px;color:var(--dim);line-height:1.7}
+.rug b{color:var(--ink)}
+.actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}
+.abtn{background:var(--deep);border:1px solid var(--line);border-radius:9px;color:var(--dim);
+  font-family:var(--tc);font-size:12.5px;padding:7px 11px;cursor:pointer}
+.abtn:hover{color:var(--lumen);border-color:var(--lumen)}
+.abtn.done{color:var(--lumen);border-color:#1f5b52}
+
+/* ---- backtest ---- */
+textarea{width:100%;min-height:130px;background:var(--deep);border:1px solid var(--line);
+  border-radius:12px;color:var(--ink);font-family:var(--mono);font-size:12.5px;padding:11px;line-height:1.8}
+.fingerprint{background:linear-gradient(165deg,#0d2438,#0b1626);border:1px solid var(--lumen);
+  border-radius:16px;padding:15px;margin:14px 0}
+.fingerprint h3{color:var(--lumen);font-size:15.5px;margin-bottom:9px}
+.fingerprint table{width:100%;border-collapse:collapse;font-size:12.5px}
+.fingerprint td{padding:5px 4px;border-bottom:1px dashed var(--line);font-family:var(--mono)}
+.fingerprint td:first-child{color:var(--dim);font-family:var(--tc)}
+.fingerprint td:last-child{text-align:right;color:var(--gold);font-weight:600}
+.wnote{font-size:12px;color:var(--faint);line-height:1.8;margin-top:9px}
+
+/* ---- watchlist ---- */
+.wl-actions{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.trend-up{color:#57e389}.trend-dn{color:var(--danger)}.trend-fl{color:var(--dim)}
+
+/* ---- misc ---- */
+.notice{background:rgba(255,180,84,.07);border:1px solid #6b4d24;border-radius:12px;
+  padding:11px 13px;font-size:12.5px;color:var(--amber);line-height:1.7;margin-bottom:14px}
+.log{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin:8px 2px;min-height:16px;white-space:pre-wrap}
+.empty{text-align:center;color:var(--faint);padding:44px 0;font-size:13.5px;line-height:2}
+.empty .big{font-size:34px}
+footer{margin-top:26px;border-top:1px solid var(--line);padding-top:13px;
+  font-size:11.5px;color:var(--faint);line-height:1.9}
+footer b{color:var(--dim)}
+@media(max-width:520px){.stats{grid-template-columns:repeat(2,1fr)}.pgrid{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="brand">
+    <h1>🐋 <span class="cn">幼鯨</span><span class="hl">雷達</span></h1>
+    <div class="en">WHALE NURSERY RADAR · SOLANA · <b>V1.2</b></div>
+    <div class="sub">少年期獵場 · 幣齡 3–30 天 · 已畢業 · 找「活過嬰兒期」的鯨魚苗</div>
+  </div>
+  <button class="scanbtn" id="scanBtn" onclick="runScan()">🔍<br>掃描</button>
+</header>
+
+<div class="tabs">
+  <div class="tab on" id="tab-scan" onclick="showTab('scan')">🐋 少年掃描</div>
+  <div class="tab" id="tab-bt" onclick="showTab('bt')">🧬 鯨魚回測</div>
+  <div class="tab" id="tab-wl" onclick="showTab('wl')">📁 追蹤名單 (<span id="wlCount">0</span>)</div>
+</div>
+
+<!-- ================= 少年掃描 ================= -->
+<div id="pane-scan">
+  <div class="stats">
+    <div class="stat"><b id="stPools">—</b><span>掃描池數</span></div>
+    <div class="stat"><b class="gd" id="stPass">—</b><span>通過少年篩選</span></div>
+    <div class="stat"><b class="hl" id="stCand">—</b><span>幼鯨候選 (S/A)</span></div>
+    <div class="stat"><b id="stTime" style="font-size:16px">—</b><span>更新時間</span></div>
+  </div>
+
+  <div class="params">
+    <h4>篩選參數(少年期定義)</h4>
+    <div class="pgrid">
+      <div><label>幣齡下限(天)</label><input id="pAgeMin" type="number" value="3"></div>
+      <div><label>幣齡上限(天)</label><input id="pAgeMax" type="number" value="30"></div>
+      <div><label>最低流動性 $</label><input id="pLiqMin" type="number" value="50000"></div>
+      <div><label>市值下限 $</label><input id="pMcMin" type="number" value="300000"></div>
+      <div><label>市值上限 $</label><input id="pMcMax" type="number" value="8000000"></div>
+      <div><label>來源頁數(GT)</label><input id="pPages" type="number" value="4" min="1" max="8"></div>
+    </div>
+  </div>
+
+  <div class="log" id="scanLog"></div>
+  <div id="scanList">
+    <div class="empty"><div class="big">🌊</div>按右上「掃描」開始搜索少年期水域<br>
+    <span style="font-size:12px">嬰兒期(&lt;3天)一律不看——那是另一支雷達的工作</span></div>
+  </div>
+</div>
+
+<!-- ================= 鯨魚回測 ================= -->
+<div id="pane-bt" style="display:none">
+  <div class="notice">🧬 貼上歷史鯨魚 CA(每行一筆,格式:<b style="font-family:var(--mono)">名稱,CA</b>)。
+    工具會抓主池的日 K 線,提取「第 2–21 天」的少年期特徵指紋,彙整成建議篩選參數。
+    ⚠ 預載清單請自行核對 CA 正確性;pump.fun 幣以畢業日為第 0 天。</div>
+  <textarea id="btInput">WIF,EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm
+POPCAT,7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr
+MOODENG,ED5nyyWEzpPPiWimP8vYm7sD7TD3LAt3Q3gRTWHzPJBY
+PNUT,2qEHjDLDLbuBgRYvsxhc5D6uDWAivNFZGan56P1tpump
+FARTCOIN,9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump
+GOAT,CzLSujWBLFsSjncfkh59rUFqvafWcY5tzedWJSuypump</textarea>
+  <div style="margin-top:10px;display:flex;gap:8px">
+    <button class="scanbtn small" id="btBtn" onclick="runBacktest()">🧬 提取特徵指紋</button>
+  </div>
+  <div class="log" id="btLog"></div>
+  <div id="btAgg"></div>
+  <div id="btList"></div>
+</div>
+
+<!-- ================= 追蹤名單 ================= -->
+<div id="pane-wl" style="display:none">
+  <div class="notice">📁 名單只存在<b>本頁記憶體</b>(與 VPS 資料完全隔離)。關頁前請「匯出 JSON」,
+    下次開頁「匯入」即可接續快照歷史——多次快照才能算出流動性/籌碼趨勢。</div>
+  <div class="wl-actions">
+    <button class="abtn" onclick="wlRefresh()">🔄 刷新快照</button>
+    <button class="abtn" onclick="wlExport()">⬇ 匯出 JSON</button>
+    <button class="abtn" onclick="document.getElementById('wlFile').click()">⬆ 匯入 JSON</button>
+    <input type="file" id="wlFile" accept=".json" style="display:none" onchange="wlImport(event)">
+  </div>
+  <div class="log" id="wlLog"></div>
+  <div id="wlList"><div class="empty"><div class="big">📭</div>尚無追蹤標的<br>在掃描結果按「➕ 追蹤」加入</div></div>
+</div>
+
+<footer>
+  數據源:<b>GeckoTerminal / DEX Screener / RugCheck 公開 API</b>(即時,瀏覽器直連)<br>
+  評分哲學:少年期看<b>地基</b>不看爆發——流動性 25 · 韌性 20 · 換手健康 15 · 買壓 15 · 動能結構 15 · 年齡適格 10<br>
+  否決規則:流動性不足 / 洗量嫌疑 / 蹭新聞幣 → 總分封頂 · 本工具為純前端獨立頁面,不連接、不讀寫 sol-meme-bot(VPS)任何資料<br>
+  ⚠ 僅供研究,不構成投資建議。迷因幣預設結局是歸零。
+</footer>
+</div>
+
+<script>
+/* ================= 基礎 ================= */
+const GT='https://api.geckoterminal.com/api/v2';
+const DS='https://api.dexscreener.com';
+const RUG='https://api.rugcheck.xyz/v1';
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const $=id=>document.getElementById(id);
+const fmt$=v=>{v=+v||0;if(v>=1e9)return '$'+(v/1e9).toFixed(2)+'B';if(v>=1e6)return '$'+(v/1e6).toFixed(2)+'M';if(v>=1e3)return '$'+(v/1e3).toFixed(1)+'K';return '$'+v.toFixed(0)};
+const fmtP=v=>{v=+v;if(!isFinite(v))return '—';const s=v>=0?'+':'';return s+v.toFixed(1)+'%'};
+const cls=v=>+v>=0?'up':'dn';
+const fmtPrice=p=>{p=+p;if(!p)return '—';if(p>=1)return '$'+p.toFixed(3);
+  const e=-Math.floor(Math.log10(p));if(e<=3)return '$'+p.toFixed(e+3);
+  return '$0.0<sub>'+(e-1)+'</sub>'+String(Math.round(p*10**(e+3))).slice(0,4)};
+const esc=s=>String(s||'').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+
+/* STORAGE-SWAP:自架 GitHub Pages 時,可把此物件換成 localStorage 包裝以跨次保存 */
+const memStore={watch:[]};   // 追蹤名單(僅記憶體)
+
+let scanResults=[];          // 本次掃描結果(依 mint 索引)
+
+async function jget(url){
+  const r=await fetch(url,{headers:{'accept':'application/json'}});
+  if(!r.ok)throw new Error(r.status+' '+url.split('/').slice(-2).join('/'));
+  return r.json();
+}
+
+function showTab(t){
+  for(const k of ['scan','bt','wl']){
+    $('tab-'+k).classList.toggle('on',k===t);
+    $('pane-'+k).style.display=(k===t)?'':'none';
+  }
+}
+
+/* ================= 少年期評分 ================= */
+const LEECH=/kimi|gpt-?\d|grok|deepseek|claude|gemini|llama|openai|sora|qwen|\bk3\b|o[34]-?mini|anthropic|nvidia/i;
+
+function scoreJuvenile(t){
+  const s={liq:0,turn:0,buy:0,mom:0,res:0,age:0};
+  const flags=[];let cap=100;
+  const ratio=t.mcap>0?t.liq/t.mcap:0;
+  const vr=t.mcap>0?t.vol24/t.mcap:0;
+
+  // 流動性地基 /25 —— 少年期的第一憲法
+  if(t.liq>=150000)s.liq+=15;else if(t.liq>=100000)s.liq+=12;else if(t.liq>=60000)s.liq+=9;else if(t.liq>=30000)s.liq+=5;
+  if(ratio>=0.12)s.liq+=10;else if(ratio>=0.08)s.liq+=7;else if(ratio>=0.05)s.liq+=4;
+  if(t.liq<30000){cap=Math.min(cap,59);flags.push(['b-bad','⚠ 流動性不足(否決)']);}
+  else if(ratio<0.05){cap=Math.min(cap,69);flags.push(['b-warn','⚠ 池淺(流動性/市值 <5%)']);}
+
+  // 健康換手 /15 —— 0.3x–3x 是活水;>8x 視為洗量
+  if(vr>=0.3&&vr<=3)s.turn=15;else if((vr>=0.15&&vr<0.3)||(vr>3&&vr<=5))s.turn=9;else if(vr>5&&vr<=8)s.turn=4;
+  if(vr>8){cap=Math.min(cap,59);flags.push(['b-bad','⚠ 洗量嫌疑(換手 '+vr.toFixed(0)+'x)']);}
+
+  // 買壓結構 /15
+  const b24=t.tx24.b+t.tx24.s>0?t.tx24.b/(t.tx24.b+t.tx24.s):0;
+  const b1=t.tx1.b+t.tx1.s>0?t.tx1.b/(t.tx1.b+t.tx1.s):0;
+  if(b24>=0.55)s.buy+=9;else if(b24>=0.5)s.buy+=6;else if(b24>=0.45)s.buy+=3;
+  if(b1>=0.55)s.buy+=6;else if(b1>=0.5)s.buy+=4;else if(b1>=0.45)s.buy+=2;
+
+  // 動能結構 /15 —— 要「穩」不要「炸」
+  if(t.h24>=0&&t.h24<=120)s.mom+=6;else if(t.h24>-25&&t.h24<0)s.mom+=3;
+  if(t.h6>=-5)s.mom+=5;
+  if(t.h1>=-3)s.mom+=4;
+  if(t.h24>250){flags.push(['b-warn','⚠ 拋物線走勢,追高風險']);}
+
+  // 存活韌性 /20 —— 預設用代理值;「深度體檢」抓日K後覆寫
+  if(t.resilience!=null){s.res=t.resilience;}
+  else{s.res=(t.h24>=-20&&t.h24<=150)?8:4;}
+
+  // 年齡適格 /10 —— 5–21 天最甜
+  if(t.ageD>=5&&t.ageD<=21)s.age=10;else s.age=6;
+
+  // 蹭幣否決
+  if(LEECH.test(t.name+' '+t.sym)){cap=Math.min(cap,65);flags.push(['b-warn','⚠ 蹭新聞幣嫌疑(注意力是借來的)']);}
+
+  let total=s.liq+s.turn+s.buy+s.mom+s.res+s.age;
+  if(total>cap){flags.push(['b-info','⛔ 否決封頂 → '+cap]);total=cap;}
+  const grade=total>=85?'S':total>=75?'A':total>=65?'B':total>=50?'C':'D';
+  return {total,grade,s,flags,capped:total===cap&&cap<100};
+}
+
+/* ================= 掃描 ================= */
+async function runScan(){
+  const btn=$('scanBtn');btn.disabled=true;
+  const log=m=>$('scanLog').textContent=m;
+  try{
+    const pages=Math.min(8,+$('pPages').value||4);
+    const urls=[GT+'/networks/solana/trending_pools?page=1',GT+'/networks/solana/trending_pools?page=2'];
+    for(let p=1;p<=pages;p++)urls.push(GT+'/networks/solana/pools?page='+p);
+    let pools=[];
+    for(let i=0;i<urls.length;i++){
+      log('📡 掃描水域 '+(i+1)+'/'+urls.length+' …');
+      try{const j=await jget(urls[i]);pools=pools.concat(j.data||[]);}catch(e){}
+      await sleep(400);
+    }
+    $('stPools').textContent=pools.length;
+
+    const aMin=+$('pAgeMin').value,aMax=+$('pAgeMax').value,
+          lMin=+$('pLiqMin').value,mMin=+$('pMcMin').value,mMax=+$('pMcMax').value;
+    const byMint={};
+    for(const p of pools){
+      const a=p.attributes||{};
+      const mint=((p.relationships?.base_token?.data?.id)||'').replace('solana_','');
+      if(!mint)continue;
+      const liq=+a.reserve_in_usd||0;
+      const mcap=+(a.market_cap_usd??a.fdv_usd)||0;
+      const created=a.pool_created_at?new Date(a.pool_created_at):null;
+      const ageD=created?(Date.now()-created)/864e5:0;
+      const t={
+        mint,pool:(p.id||'').replace('solana_',''),
+        name:(a.name||'').split(' / ')[0],sym:(a.name||'').split(' / ')[0],
+        price:+a.base_token_price_usd||0,liq,mcap,
+        vol24:+(a.volume_usd?.h24)||0,ageD,
+        h1:+(a.price_change_percentage?.h1)||0,
+        h6:+(a.price_change_percentage?.h6)||0,
+        h24:+(a.price_change_percentage?.h24)||0,
+        tx24:{b:+(a.transactions?.h24?.buys)||0,s:+(a.transactions?.h24?.sells)||0},
+        tx1:{b:+(a.transactions?.h1?.buys)||0,s:+(a.transactions?.h1?.sells)||0},
+        resilience:null,rug:null
+      };
+      if(!byMint[mint]||byMint[mint].liq<liq)byMint[mint]=t;
+    }
+    let list=Object.values(byMint).filter(t=>
+      t.ageD>=aMin&&t.ageD<=aMax&&t.liq>=Math.min(lMin,30000)&&t.mcap>=mMin&&t.mcap<=mMax);
+    for(const t of list)t.score=scoreJuvenile(t);
+    list.sort((a,b)=>b.score.total-a.score.total);
+    scanResults=list;
+    const cands=list.filter(t=>t.score.grade==='S'||t.score.grade==='A');
+    for(const t of cands)wlAutoAdd(t);          // S/A 自動入追蹤名單並記快照
+    renderWL();
+    $('stPass').textContent=list.length;
+    $('stCand').textContent=cands.length;
+    $('stTime').textContent=new Date().toTimeString().slice(0,5);
+    renderScan();
+    log(list.length
+      ?(cands.length?'✅ 完成。'+cands.length+' 個 S/A 候選已自動入追蹤名單 📁':'✅ 完成。少年期訊號本來就少——這是特徵不是缺陷。')
+      :'✅ 完成。本輪熱門池中沒有符合少年期定義的標的,屬正常現象。');
+    // 自動幫前 3 名做 RugCheck
+    for(const t of list.slice(0,3)){await fetchRug(t.mint);await sleep(500);}
+  }catch(e){log('❌ '+e.message);}
+  btn.disabled=false;
+}
+
+function ringSVG(score){
+  const r=26,c=2*Math.PI*r,off=c*(1-score/100);
+  const col=score>=85?'var(--lumen)':score>=75?'#8be99a':score>=65?'var(--sonar)':score>=50?'var(--amber)':'var(--danger)';
+  return `<svg width="66" height="66" viewBox="0 0 66 66">
+    <circle cx="33" cy="33" r="${r}" fill="none" stroke="var(--line)" stroke-width="5"/>
+    <circle cx="33" cy="33" r="${r}" fill="none" stroke="${col}" stroke-width="5" stroke-linecap="round"
+      stroke-dasharray="${c}" stroke-dashoffset="${off}" transform="rotate(-90 33 33)"/>
+    <text x="33" y="39" text-anchor="middle" fill="${col}" font-family="var(--mono)" font-size="19" font-weight="600">${score}</text>
+  </svg>`;
+}
+function gbandHTML(ageD){
+  const pos=Math.min(100,Math.max(0,ageD/30*100));
+  return `<div class="gband"><div class="axis"><span class="whale" style="left:${pos}%">🐋</span></div>
+    <div class="lbls"><span>0d 嬰兒</span><span class="sweet">3–21d 少年甜蜜帶</span><span>30d</span></div></div>`;
+}
+const GLABEL={S:'S 幼鯨候選',A:'A 觀察',B:'B 一般',C:'C 弱',D:'D 淘汰'};
+
+function cardHTML(t,i,ctx){
+  const sc=t.score;
+  const rug=t.rug?`<div class="rug">🛡 前10大錢包 <b>${t.rug.top10.toFixed(1)}%</b>(${t.rug.top10<=25?'<span class="up">分散</span>':t.rug.top10<=40?'<span style="color:var(--amber)">偏集中</span>':'<span class="dn">高度集中</span>'})
+     · 持幣人 <b>${t.rug.holders??'—'}</b> · 風險項 <b>${t.rug.risks}</b></div>`:'';
+  const res=t.resilience!=null?`<span class="badge b-ok">🩺 韌性 ${t.resilience}/20 · 最大回撤 ${t.dd!=null?t.dd.toFixed(0)+'%':'—'}${t.recovered?' · 已收復':''}</span>`:'';
+  return `<div class="card ${sc.grade==='S'?'sGrade':''}" id="card-${ctx}-${i}">
+    <div class="chead">
+      <div class="ring">${ringSVG(sc.total)}<span class="grade g-${sc.grade}">${GLABEL[sc.grade]}</span></div>
+      <div class="cbody">
+        <div class="cname"><b>${esc(t.name)}</b><span class="sym">${t.mint.slice(0,4)}…${t.mint.slice(-4)}</span>
+          <span class="price">${fmtPrice(t.price)}</span></div>
+        <div class="chg">1H <span class="${cls(t.h1)}">${fmtP(t.h1)}</span> · 6H <span class="${cls(t.h6)}">${fmtP(t.h6)}</span> · 24H <span class="${cls(t.h24)}">${fmtP(t.h24)}</span></div>
+        <div class="kpis">
+          <span class="kpi"><em>MCAP</em>${fmt$(t.mcap)}</span>
+          <span class="kpi"><em>LIQ</em>${fmt$(t.liq)}</span>
+          <span class="kpi"><em>VOL</em>${fmt$(t.vol24)}</span>
+          <span class="kpi"><em>齡</em>${t.ageD.toFixed(1)}天</span>
+          <span class="kpi"><em>換手</em>${t.mcap?(t.vol24/t.mcap).toFixed(1):'—'}x</span>
+        </div>
+        <div class="badges">${sc.flags.map(f=>`<span class="badge ${f[0]}">${f[1]}</span>`).join('')}${res}</div>
+        ${gbandHTML(t.ageD)}
+        <div class="brk">
+          ${[['流動性地基',sc.s.liq,25],['存活韌性',sc.s.res,20],['健康換手',sc.s.turn,15],['買壓結構',sc.s.buy,15],['動能結構',sc.s.mom,15],['年齡適格',sc.s.age,10]]
+            .map(r=>`<div class="brow"><span>${r[0]}</span><div class="bar"><i style="width:${r[1]/r[2]*100}%"></i></div><b>${r[1]}/${r[2]}</b></div>`).join('')}
+          ${rug}
+        </div>
+        <div class="actions">
+          <button class="abtn" onclick="toggleCard('${ctx}',${i})">📊 評分拆解</button>
+          <button class="abtn" onclick="deepCheck('${t.mint}')">🩺 深度體檢(日K韌性)</button>
+          <button class="abtn" onclick="fetchRug('${t.mint}')">🛡 RugCheck</button>
+          <button class="abtn" onclick="wlAdd('${t.mint}')">➕ 追蹤</button>
+          <button class="abtn" onclick="navigator.clipboard.writeText('${t.mint}');this.textContent='✓ 已複製'">📋 CA</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+function renderScan(){
+  $('scanList').innerHTML=scanResults.length
+    ?scanResults.map((t,i)=>cardHTML(t,i,'scan')).join('')
+    :'<div class="empty"><div class="big">🌊</div>沒有符合條件的少年期標的<br><span style="font-size:12px">可放寬市值/流動性參數,或稍後再掃</span></div>';
+}
+function toggleCard(ctx,i){$('card-'+ctx+'-'+i).classList.toggle('open');}
+
+/* ---- RugCheck ---- */
+async function fetchRug(mint){
+  const t=scanResults.find(x=>x.mint===mint);if(!t)return;
+  try{
+    const j=await jget(RUG+'/tokens/'+mint+'/report');
+    const th=(j.topHolders||[]).slice(0,10).reduce((a,h)=>a+(+h.pct||0),0);
+    t.rug={top10:th,holders:j.totalHolders??(j.token?.holders)??null,
+           risks:(j.risks||[]).filter(r=>r.level==='danger'||r.level==='warn').length};
+    renderScan();
+  }catch(e){/* rugcheck 對新幣偶爾 404,略過 */}
+}
+
+/* ---- 深度體檢:抓日K算韌性 ---- */
+async function deepCheck(mint){
+  const t=scanResults.find(x=>x.mint===mint);if(!t||!t.pool)return;
+  try{
+    const j=await jget(GT+'/networks/solana/pools/'+t.pool+'/ohlcv/day?aggregate=1&limit=100');
+    const cs=(j.data?.attributes?.ohlcv_list||[]).slice().sort((a,b)=>a[0]-b[0]);
+    if(cs.length<2)return;
+    const closes=cs.map(c=>+c[4]);const highs=cs.map(c=>+c[2]);
+    const ath=Math.max(...highs);let peak=closes[0],maxDD=0;
+    for(const c of closes){peak=Math.max(peak,c);maxDD=Math.max(maxDD,(peak-c)/peak*100);}
+    const now=closes[closes.length-1];const fromATH=now/ath;
+    let res;
+    if(maxDD>=40&&fromATH>=0.5)res=20;
+    else if(maxDD>=40&&fromATH>=0.35)res=14;
+    else if(maxDD<40&&t.ageD<7)res=10;
+    else if(fromATH<0.3)res=4;else res=8;
+    t.resilience=res;t.dd=maxDD;t.recovered=(maxDD>=40&&fromATH>=0.5);
+    t.score=scoreJuvenile(t);
+    scanResults.sort((a,b)=>b.score.total-a.score.total);
+    renderScan();
+  }catch(e){alert('日K抓取失敗:'+e.message);}
+}
+
+/* ================= 鯨魚回測 ================= */
+async function runBacktest(){
+  const btn=$('btBtn');btn.disabled=true;
+  const log=m=>$('btLog').textContent=m;
+  const lines=$('btInput').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const out=[];$('btList').innerHTML='';$('btAgg').innerHTML='';
+  for(let i=0;i<lines.length;i++){
+    const [label,ca]=lines[i].includes(',')?lines[i].split(',').map(s=>s.trim()):[lines[i].slice(0,6),lines[i]];
+    log('🧬 ('+(i+1)+'/'+lines.length+') '+label+':解析主池…');
+    try{
+      const ds=await jget(DS+'/latest/dex/tokens/'+ca);
+      // 回測量的是少年期 → 必須抓「最老的出生池」,不是現在最深的池
+      // (老鯨魚成名後的新大池會蓋過出生池,抓錯池 = 量到成年期,數據作廢)
+      const pairs=(ds.pairs||[]).filter(p=>p.chainId==='solana')
+        .sort((a,b)=>(+a.pairCreatedAt||9e15)-(+b.pairCreatedAt||9e15));
+      if(!pairs.length)throw new Error('找不到 Solana 交易對');
+      // 由老到新最多試 3 個池,取第一個日K足夠的
+      let cs=null,pair=null;
+      for(const cand of pairs.slice(0,3)){
+        await sleep(450);
+        log('🧬 ('+(i+1)+'/'+lines.length+') '+label+':抓取日K('+new Date(+cand.pairCreatedAt).toISOString().slice(0,10)+' 池)…');
+        try{
+          const j=await jget(GT+'/networks/solana/pools/'+cand.pairAddress+'/ohlcv/day?aggregate=1&limit=1000');
+          const rows=(j.data?.attributes?.ohlcv_list||[]).slice().sort((a,b)=>a[0]-b[0]);
+          if(rows.length>=5){cs=rows;pair=cand;break;}
+        }catch(e){}
+      }
+      if(!cs)throw new Error('前 3 個池都抓不到足夠日K(GT 歷史未保留)');
+      const f=extractFeatures(cs);
+      f.label=label;f.ca=ca;f.now=pair.baseToken?.symbol||label;
+      out.push(f);
+      $('btList').innerHTML+=btCardHTML(f);
+    }catch(e){$('btList').innerHTML+=`<div class="card"><b>${esc(label)}</b> <span class="dn" style="font-size:13px">✗ ${esc(e.message)}</span></div>`;}
+    await sleep(500);
+  }
+  if(out.length)renderFingerprint(out);
+  log('✅ 完成 '+out.length+'/'+lines.length+' 隻鯨魚的特徵提取');
+  btn.disabled=false;
+}
+
+function extractFeatures(cs){
+  const closes=cs.map(c=>+c[4]),highs=cs.map(c=>+c[2]),vols=cs.map(c=>+c[5]);
+  const n=cs.length;
+  const d=(k)=>Math.min(k,n-1);           // 第 k 天(0-indexed 防越界)
+  const ref=closes[d(2)];                  // 第3天收盤 = 進場參考價
+  const ath=Math.max(...highs);
+  const athX=ref>0?ath/ref:0;
+  const d21X=ref>0?closes[d(20)]/ref:0;
+  // 第2–21天回撤事件(≥40%)
+  let peak=closes[d(1)],inDD=false,ddCount=0,maxDD=0;
+  for(let k=d(1);k<=d(20);k++){
+    const c=closes[k];peak=Math.max(peak,c);
+    const dd=(peak-c)/peak*100;maxDD=Math.max(maxDD,dd);
+    if(dd>=40&&!inDD){ddCount++;inDD=true;}
+    if(dd<20)inDD=false;
+  }
+  // 量能趨勢:第8–21天均量 / 第2–7天均量
+  const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
+  const vEarly=avg(vols.slice(d(1),d(7)+1)),vLate=avg(vols.slice(d(7)+1,d(20)+1));
+  const volTrend=vEarly>0?vLate/vEarly:0;
+  // 少年期停留:市值資料日K沒有,用價格代理——第2–21天收盤價落在 ref 的 0.5–5 倍區間的天數
+  const dwell=closes.slice(d(1),d(20)+1).filter(c=>c>=ref*0.5&&c<=ref*5).length;
+  return {days:n,athX,d21X,ddCount,maxDD,volTrend,dwell,
+          birth:new Date(cs[0][0]*1000).toISOString().slice(0,10)};
+}
+function btCardHTML(f){
+  const old=(Date.now()-new Date(f.birth))/864e5>240;
+  const warn=old?'':' <span style="color:var(--amber)">⚠ 出生日偏近,可能仍非原始池,建議核對 CA</span>';
+  return `<div class="card"><div class="cname"><b>🐋 ${esc(f.label)}</b>
+    <span class="sym">出生池誕生 ${f.birth} · 共 ${f.days} 根日K${warn}</span></div>
+    <div class="kpis" style="margin-top:9px">
+      <span class="kpi"><em>D3→ATH</em>${f.athX>=1?f.athX.toFixed(0)+'x':'—'}</span>
+      <span class="kpi"><em>D3→D21</em>${f.d21X?f.d21X.toFixed(1)+'x':'—'}</span>
+      <span class="kpi"><em>D2–21 大回撤</em>${f.ddCount} 次</span>
+      <span class="kpi"><em>最深回撤</em>${f.maxDD.toFixed(0)}%</span>
+      <span class="kpi"><em>量能後/前</em>${f.volTrend.toFixed(1)}x</span>
+      <span class="kpi"><em>甜蜜帶停留</em>${f.dwell}/20 天</span>
+    </div></div>`;
+}
+function renderFingerprint(out){
+  const med=a=>{a=a.slice().sort((x,y)=>x-y);return a[Math.floor(a.length/2)]};
+  const m={athX:med(out.map(f=>f.athX)),d21X:med(out.map(f=>f.d21X)),
+    dd:med(out.map(f=>f.ddCount)),maxDD:med(out.map(f=>f.maxDD)),
+    vt:med(out.map(f=>f.volTrend)),dw:med(out.map(f=>f.dwell))};
+  $('btAgg').innerHTML=`<div class="fingerprint"><h3>🧬 鯨魚少年期特徵指紋(中位數,n=${out.length})</h3>
+    <table>
+      <tr><td>D3 進場 → 歷史最高</td><td>${m.athX.toFixed(0)}x</td></tr>
+      <tr><td>D3 → D21(少年期內回報)</td><td>${m.d21X.toFixed(1)}x</td></tr>
+      <tr><td>少年期 ≥40% 回撤次數</td><td>${m.dd} 次</td></tr>
+      <tr><td>少年期最深回撤</td><td>${m.maxDD.toFixed(0)}%</td></tr>
+      <tr><td>量能趨勢(D8–21 / D2–7)</td><td>${m.vt.toFixed(1)}x</td></tr>
+      <tr><td>甜蜜帶停留天數(/20)</td><td>${m.dw} 天</td></tr>
+    </table>
+    <div class="wnote">📐 讀法:鯨魚在少年期<b>普遍經歷 ${m.dd} 次以上的 40% 級回撤但沒死</b>——回撤不是淘汰訊號,「回撤後池子還在、量能還在爬」才是關鍵。
+    量能趨勢 ≥1 代表注意力自帶成長性(對照蹭幣的量能衰減)。這組中位數可直接回填「少年掃描」的參數與否決規則。
+    ⚠ 樣本存在倖存者偏差:建議另備一批同期死幣做對照組,特徵差異才有統計意義。</div></div>`;
+}
+
+/* ================= 追蹤名單 ================= */
+function wlAutoAdd(t){
+  let w=memStore.watch.find(x=>x.mint===t.mint);
+  if(!w){w={mint:t.mint,name:t.name,snaps:[],auto:true};memStore.watch.push(w);}
+  w.snaps.push(snapOf(t));
+}
+function wlAdd(mint){
+  const t=scanResults.find(x=>x.mint===mint);if(!t)return;
+  let w=memStore.watch.find(x=>x.mint===mint);
+  if(!w){w={mint,name:t.name,snaps:[]};memStore.watch.push(w);}
+  w.snaps.push(snapOf(t));
+  $('wlCount').textContent=memStore.watch.length;
+  renderWL();alert('已加入追蹤:'+t.name+'(記得離開前匯出 JSON)');
+}
+function snapOf(t){return {ts:Date.now(),mcap:t.mcap,liq:t.liq,vol:t.vol24,
+  top10:t.rug?t.rug.top10:null,holders:t.rug?t.rug.holders:null,score:t.score.total};}
+async function wlRefresh(){
+  const log=m=>$('wlLog').textContent=m;
+  for(let i=0;i<memStore.watch.length;i++){
+    const w=memStore.watch[i];log('🔄 ('+(i+1)+'/'+memStore.watch.length+') '+w.name);
+    try{
+      const ds=await jget(DS+'/latest/dex/tokens/'+w.mint);
+      const p=(ds.pairs||[]).filter(x=>x.chainId==='solana')
+        .sort((a,b)=>(+b.liquidity?.usd||0)-(+a.liquidity?.usd||0))[0];
+      if(p)w.snaps.push({ts:Date.now(),mcap:+p.marketCap||+p.fdv||0,liq:+p.liquidity?.usd||0,
+        vol:+p.volume?.h24||0,top10:null,holders:null,score:null});
+    }catch(e){}
+    await sleep(400);
+  }
+  log('✅ 快照已更新');renderWL();
+}
+function trendTag(a,b,label){
+  if(a==null||b==null)return '';
+  const chg=a>0?(b-a)/a*100:0;
+  const c=chg>3?'trend-up':chg<-3?'trend-dn':'trend-fl';
+  const arrow=chg>3?'▲':chg<-3?'▼':'—';
+  return `<span class="kpi"><em>${label}趨勢</em><span class="${c}">${arrow} ${chg>=0?'+':''}${chg.toFixed(0)}%</span></span>`;
+}
+function renderWL(){
+  $('wlCount').textContent=memStore.watch.length;
+  if(!memStore.watch.length){$('wlList').innerHTML='<div class="empty"><div class="big">📭</div>尚無追蹤標的</div>';return;}
+  $('wlList').innerHTML=memStore.watch.map((w,i)=>{
+    const first=w.snaps[0],last=w.snaps[w.snaps.length-1];
+    return `<div class="card"><div class="cname"><b>${esc(w.name)}</b>
+      <span class="sym">${w.mint.slice(0,4)}…${w.mint.slice(-4)} · 快照 ${w.snaps.length} 次${w.auto?' · <span style="color:var(--lumen)">⚡自動收錄</span>':''}</span></div>
+      <div class="kpis" style="margin-top:9px">
+        <span class="kpi"><em>MCAP</em>${fmt$(last.mcap)}</span>
+        <span class="kpi"><em>LIQ</em>${fmt$(last.liq)}</span>
+        ${trendTag(first.liq,last.liq,'流動性')}
+        ${trendTag(first.mcap,last.mcap,'市值')}
+        ${last.top10!=null?`<span class="kpi"><em>前10占比</em>${last.top10.toFixed(1)}%</span>`:''}
+      </div>
+      <div class="actions">
+        <button class="abtn" onclick="navigator.clipboard.writeText('${w.mint}');this.textContent='✓'">📋 CA</button>
+        <button class="abtn" onclick="memStore.watch.splice(${i},1);renderWL()">🗑 移除</button>
+      </div></div>`;
+  }).join('');
+}
+function wlExport(){
+  const blob=new Blob([JSON.stringify({v:1,exported:Date.now(),watch:memStore.watch},null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='whale-nursery-watchlist-'+new Date().toISOString().slice(0,10)+'.json';a.click();
+}
+function wlImport(ev){
+  const f=ev.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{try{
+    const j=JSON.parse(r.result);
+    for(const w of (j.watch||[])){
+      const ex=memStore.watch.find(x=>x.mint===w.mint);
+      if(ex)ex.snaps=ex.snaps.concat(w.snaps).sort((a,b)=>a.ts-b.ts);
+      else memStore.watch.push(w);
+    }
+    renderWL();$('wlLog').textContent='✅ 已匯入並合併快照歷史';
+  }catch(e){alert('匯入失敗:'+e.message);}};
+  r.readAsText(f);
+}
+</script>
+</body>
+</html>
