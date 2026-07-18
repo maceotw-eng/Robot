@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>結算日動能回測 — TXO Settlement Radar</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root{
+    --paper:#EDF0F2;         /* 淡藍灰方格紙 */
+    --grid:#DCE2E7;
+    --ink:#182430;           /* 墨藍 */
+    --ink-soft:#5A6B7A;
+    --card:#FAFBFC;
+    --line:#C9D2D9;
+    --up:#C0392B;            /* 台股紅=漲/賺 */
+    --dn:#1E8060;            /* 台股綠=跌/虧 */
+    --warn:#9A6A00;
+    --warn-bg:#FFF6DF;
+    --mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+    color:var(--ink);
+    background:
+      linear-gradient(var(--grid) 1px, transparent 1px) 0 0/100% 28px,
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0/28px 100%,
+      var(--paper);
+    min-height:100vh;padding:24px 16px 80px;
+  }
+  .wrap{max-width:980px;margin:0 auto}
+  header{margin-bottom:28px;border-bottom:3px solid var(--ink);padding-bottom:14px}
+  header h1{font-size:clamp(22px,4vw,30px);letter-spacing:.04em;font-weight:900}
+  header h1 .en{font-family:var(--mono);font-size:.55em;font-weight:400;color:var(--ink-soft);letter-spacing:.12em;margin-left:.6em}
+  header p{color:var(--ink-soft);margin-top:6px;font-size:14px}
+  .legend{display:inline-flex;gap:14px;margin-top:8px;font-size:12px;font-family:var(--mono)}
+  .legend b{padding:1px 8px;border-radius:3px;color:#fff}
+  .legend .u{background:var(--up)} .legend .d{background:var(--dn)}
+  section{background:var(--card);border:1px solid var(--line);border-radius:10px;
+    padding:20px;margin-bottom:20px;box-shadow:0 1px 3px rgba(24,36,48,.06)}
+  section h2{font-size:15px;letter-spacing:.14em;margin-bottom:14px;
+    display:flex;align-items:center;gap:10px}
+  section h2::after{content:"";flex:1;height:1px;background:var(--line)}
+  .drop{border:2px dashed var(--line);border-radius:8px;padding:26px;text-align:center;
+    color:var(--ink-soft);cursor:pointer;transition:.15s;font-size:14px;line-height:1.8}
+  .drop.on{border-color:var(--up);background:#FBF1EF;color:var(--up)}
+  .drop kbd{font-family:var(--mono);background:#fff;border:1px solid var(--line);
+    border-radius:4px;padding:1px 6px;font-size:12px}
+  .row{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin-top:14px}
+  .field{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ink-soft)}
+  .field input,.field select{font-family:var(--mono);font-size:14px;padding:7px 9px;
+    border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);width:110px}
+  .field.chk{flex-direction:row;align-items:center;gap:6px;padding-bottom:8px;color:var(--ink)}
+  button{font:inherit;font-weight:700;padding:9px 18px;border-radius:6px;cursor:pointer;
+    border:1.5px solid var(--ink);background:var(--ink);color:#fff;transition:.15s}
+  button:hover{transform:translateY(-1px)}
+  button.ghost{background:#fff;color:var(--ink)}
+  button:disabled{opacity:.45;cursor:not-allowed;transform:none}
+  #fileStatus{font-family:var(--mono);font-size:12px;margin-top:12px;color:var(--ink-soft);
+    max-height:110px;overflow:auto;line-height:1.7;white-space:pre-wrap}
+  .banner{border-left:4px solid var(--warn);background:var(--warn-bg);color:var(--warn);
+    padding:10px 14px;border-radius:0 6px 6px 0;font-size:13px;margin-bottom:16px;display:none}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px}
+  .card{border:1px solid var(--line);border-radius:8px;padding:12px;background:#fff}
+  .card .k{font-size:11px;color:var(--ink-soft);letter-spacing:.08em}
+  .card .v{font-family:var(--mono);font-size:20px;font-weight:700;margin-top:4px}
+  .v.up{color:var(--up)} .v.dn{color:var(--dn)}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:6px}
+  th{font-size:11px;letter-spacing:.1em;color:var(--ink-soft);text-align:right;
+    border-bottom:2px solid var(--ink);padding:6px 8px}
+  th:first-child,td:first-child{text-align:left}
+  td{font-family:var(--mono);text-align:right;padding:6px 8px;border-bottom:1px solid var(--grid)}
+  td.up{color:var(--up);font-weight:700} td.dn{color:var(--dn);font-weight:700}
+  .charts{display:grid;gap:18px}
+  .chartbox{background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px}
+  .chartbox h3{font-size:12px;letter-spacing:.1em;color:var(--ink-soft);margin-bottom:8px}
+  .rules{font-size:13px;line-height:2;color:var(--ink-soft)}
+  .rules b{color:var(--ink)}
+  .tables2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  @media(max-width:640px){.tables2{grid-template-columns:1fr}}
+  footer{text-align:center;color:var(--ink-soft);font-size:12px;font-family:var(--mono);margin-top:30px}
+  #report{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>結算日動能回測<span class="en">TXO SETTLEMENT RADAR</span></h1>
+  <p>驗證:結算日 11:00 前早盤區間突破,對 13:30 結算價的方向預測力(第一階段.期貨點數計分)</p>
+  <div class="legend"><b class="u">紅=獲利/漲</b><b class="d">綠=虧損/跌</b><span style="color:var(--ink-soft)">台股語義</span></div>
+</header>
+
+<section>
+  <h2>① 載入資料</h2>
+  <div class="drop" id="drop">
+    拖入期交所 <kbd>Daily_YYYY_MM_DD.zip</kbd>(每筆成交資料,可多選)<br>
+    或 Python 工具產出的 <kbd>TX_1min_*.csv</kbd> — 點此選擇檔案
+    <input type="file" id="fileInput" multiple accept=".zip,.csv" style="display:none">
+  </div>
+  <div class="row">
+    <button class="ghost" id="btnDemo">載入合成示範資料(52 週.無實證意義)</button>
+    <button class="ghost" id="btnClear">清空</button>
+    <a href="https://www.taifex.com.tw/cht/3/dlFutDailyMarketView" target="_blank" rel="noopener"
+       style="font-size:12px;color:var(--ink-soft)">期交所資料下載頁 ↗(瀏覽器無法跨域直抓,需手動下載)</a>
+  </div>
+  <div id="fileStatus">尚未載入資料</div>
+</section>
+
+<section>
+  <h2>② 參數</h2>
+  <div class="row">
+    <label class="field">區間截止<select id="pRangeEnd">
+      <option value="660" selected>11:00</option><option value="630">10:30</option>
+      <option value="690">11:30</option><option value="600">10:00</option></select></label>
+    <label class="field">突破緩衝(點)<input id="pBuffer" type="number" value="5" step="1"></label>
+    <label class="field">量能倍數(0=關)<input id="pVolMult" type="number" value="1.5" step="0.5"></label>
+    <label class="field">來回成本(點)<input id="pCost" type="number" value="2" step="0.5"></label>
+    <label class="field chk"><input id="pShort" type="checkbox" checked>含做空訊號</label>
+    <button id="btnRun" disabled>執行回測</button>
+  </div>
+</section>
+
+<div id="report">
+  <div class="banner" id="synBanner">⚠️ 目前顯示<b>合成示範資料</b>的結果 — 僅供驗證流程,績效數字無任何實證意義。</div>
+  <section>
+    <h2>③ 整體績效</h2>
+    <div class="cards" id="cards"></div>
+    <div class="tables2">
+      <div><h3 style="font-size:12px;color:var(--ink-soft);margin-bottom:8px">多空拆解</h3>
+        <table id="tblSide"></table></div>
+      <div><h3 style="font-size:12px;color:var(--ink-soft);margin-bottom:8px">進場時段</h3>
+        <table id="tblHour"></table></div>
+    </div>
+  </section>
+  <section>
+    <h2>④ 圖表</h2>
+    <div class="charts">
+      <div class="chartbox"><h3>權益曲線(累積淨點數)</h3><canvas id="chEq" height="90"></canvas></div>
+      <div class="chartbox"><h3>水下曲線(距高點回撤)</h3><canvas id="chDD" height="60"></canvas></div>
+      <div class="chartbox"><h3>單筆淨點數分佈</h3><canvas id="chHist" height="70"></canvas></div>
+      <div class="chartbox"><h3>分月淨點數</h3><canvas id="chMon" height="70"></canvas></div>
+    </div>
+  </section>
+  <section>
+    <h2>⑤ 分月績效</h2>
+    <table id="tblMon"></table>
+    <div class="row"><button class="ghost" id="btnCsv">下載逐筆明細 CSV</button></div>
+  </section>
+  <section>
+    <h2>⑥ 解讀守則</h2>
+    <div class="rules">
+      1. <b>t 統計量 &lt; 2</b> 視為證據不足,總點數為正不構成結論。<br>
+      2. 拿掉最好的 3 筆後若轉負,屬<b>彩券型分佈</b>,倉位邏輯需按彩券處理。<br>
+      3. 多空一邊明顯較差時,<b>先砍弱邊</b>,不調參數硬救。<br>
+      4. 本工具為<b>期貨點數驗證</b>;通過後才進第二階段疊選擇權定價(權利金/IV/theta)。<br>
+      5. 改參數後結論若翻轉,視為<b>參數敏感</b>=訊號不穩。
+    </div>
+  </section>
+</div>
+
+<footer>TXO Settlement Radar · 單檔 HTML · 資料不離開瀏覽器</footer>
+</div>
+
+<script>
+"use strict";
+/* ---------- 全域狀態 ---------- */
+const DAYS = new Map();      // 'YYYY-MM-DD' -> [{t,open,high,low,close,volume}]
+let isSynthetic = false;
+let lastTrades = [];
+let charts = {};
+const $ = id => document.getElementById(id);
+const T = {RANGE_START: 8*60+45, CUTOFF: 12*60+30, SETTLE_A: 13*60, SETTLE_B: 13*60+29};
+
+/* ---------- 載入:UI ---------- */
+const drop = $("drop"), fi = $("fileInput");
+drop.onclick = () => fi.click();
+drop.ondragover = e => {e.preventDefault(); drop.classList.add("on");};
+drop.ondragleave = () => drop.classList.remove("on");
+drop.ondrop = e => {e.preventDefault(); drop.classList.remove("on"); handleFiles(e.dataTransfer.files);};
+fi.onchange = () => handleFiles(fi.files);
+$("btnClear").onclick = () => {DAYS.clear(); isSynthetic=false; status("尚未載入資料"); $("btnRun").disabled=true; $("report").style.display="none";};
+$("btnDemo").onclick = () => {genSynthetic(); isSynthetic=true; afterLoad("合成示範");};
+$("btnRun").onclick = runBacktest;
+$("btnCsv").onclick = exportCsv;
+
+function status(msg){$("fileStatus").textContent = msg;}
+function afterLoad(src){
+  $("btnRun").disabled = DAYS.size===0;
+  status(`已載入 ${DAYS.size} 個交易日(${src})\n` + [...DAYS.keys()].sort().join("  "));
+}
+
+async function handleFiles(files){
+  isSynthetic = false;
+  let log = [];
+  for(const f of files){
+    try{
+      if(f.name.toLowerCase().endsWith(".zip")) log.push(await parseTaifexZip(f));
+      else if(f.name.toLowerCase().endsWith(".csv")) log.push(parseBarCsv(f.name, await f.text()));
+    }catch(err){ log.push(`✗ ${f.name}: ${err.message}`); }
+    status(log.join("\n"));
+  }
+  afterLoad("上傳檔案");
+}
+
+/* ---------- 解析:期交所逐筆 zip ---------- */
+const ALIAS = {
+  date:["成交日期"], product:["商品代號"], expiry:["到期月份(週別)"],
+  time:["成交時間"], price:["成交價格"], volume:["成交數量(B+S)","成交數量(B or S)","成交數量"]
+};
+async function parseTaifexZip(file){
+  const zip = await JSZip.loadAsync(await file.arrayBuffer());
+  const name = Object.keys(zip.files)[0];
+  const bytes = await zip.files[name].async("uint8array");
+  const text = new TextDecoder("big5").decode(bytes);
+  const lines = text.split(/\r?\n/);
+  const header = lines[0].split(",").map(s=>s.trim());
+  const col = {};
+  for(const k in ALIAS){
+    col[k] = header.findIndex(h => ALIAS[k].some(a => h===a || h.startsWith(a)));
+    if(col[k] < 0) throw new Error(`欄位對不上:缺「${ALIAS[k][0]}」,實際=${header.join("|")}`);
+  }
+  // 第一輪:收 TX 非價差列,找近月
+  const rows = []; let minExp = null;
+  for(let i=1;i<lines.length;i++){
+    const c = lines[i].split(",");
+    if(c.length < header.length) continue;
+    if(c[col.product].trim() !== "TX") continue;
+    const exp = c[col.expiry].trim();
+    if(exp.includes("/")) continue;
+    rows.push(c);
+    if(minExp===null || exp < minExp) minExp = exp;
+  }
+  if(!rows.length) throw new Error("檔內無 TX 資料");
+  // 第二輪:近月 -> 1 分 K(僅日盤)
+  const bars = new Map();  // minuteOfDay -> bar
+  let dstr = null;
+  for(const c of rows){
+    if(c[col.expiry].trim() !== minExp) continue;
+    const t = c[col.time].trim().replace(/:/g,"").padStart(6,"0");
+    const mm = +t.slice(0,2)*60 + +t.slice(2,4);
+    if(mm < T.RANGE_START || mm > 13*60+45) continue;
+    const px = parseFloat(c[col.price]); if(!isFinite(px)) continue;
+    const vol = (parseFloat(c[col.volume])||0)/2;
+    if(!dstr){ const d = c[col.date].trim().replace(/\//g,"-");
+      dstr = d.length===8 ? `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6)}` : d; }
+    let b = bars.get(mm);
+    if(!b) bars.set(mm, {t:mm, open:px, high:px, low:px, close:px, volume:vol});
+    else { b.high=Math.max(b.high,px); b.low=Math.min(b.low,px); b.close=px; b.volume+=vol; }
+  }
+  const arr = [...bars.values()].sort((a,b)=>a.t-b.t);
+  if(arr.length < 60) throw new Error("有效分鐘數不足(<60)");
+  DAYS.set(dstr, arr);
+  return `✓ ${file.name} → ${dstr} (${arr.length} bars, 近月=${minExp})`;
+}
+
+/* ---------- 解析:1 分 K CSV(Python 工具產出) ---------- */
+function parseBarCsv(name, text){
+  const lines = text.trim().split(/\r?\n/);
+  const arr = [];
+  let dstr = (name.match(/(\d{4}-\d{2}-\d{2})/)||[])[1] || null;
+  for(let i=1;i<lines.length;i++){
+    const c = lines[i].split(",");
+    if(c.length < 6) continue;
+    const ts = c[0]; const hh=+ts.slice(11,13), mi=+ts.slice(14,16);
+    if(!dstr) dstr = ts.slice(0,10);
+    arr.push({t:hh*60+mi, open:+c[1], high:+c[2], low:+c[3], close:+c[4], volume:+c[5]});
+  }
+  if(arr.length < 60) throw new Error("有效分鐘數不足");
+  DAYS.set(dstr, arr.sort((a,b)=>a.t-b.t));
+  return `✓ ${name} → ${dstr} (${arr.length} bars)`;
+}
+
+/* ---------- 合成示範資料 ---------- */
+function genSynthetic(){
+  DAYS.clear();
+  let seed = 7;
+  const rnd = () => (seed = (seed*1103515245+12345) & 0x7fffffff) / 0x7fffffff;
+  const gauss = () => { let u=0,v=0; while(!u)u=rnd(); while(!v)v=rnd();
+    return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); };
+  let d = new Date(2025,6,16);                       // 對齊某個週三
+  d.setDate(d.getDate() - ((d.getDay()+4)%7));
+  for(let w=0; w<52; w++){
+    const day = new Date(d); day.setDate(d.getDate()+w*7);
+    const key = `${day.getFullYear()}-${String(day.getMonth()+1).padStart(2,"0")}-${String(day.getDate()).padStart(2,"0")}`;
+    const n = (13*60+45) - T.RANGE_START + 1;
+    const mom = rnd() < .45, dir = rnd()<.5?-1:1;
+    let px = 23000 + gauss()*800;
+    const arr = [];
+    for(let i=0;i<n;i++){
+      const inMom = mom && i > n/2;
+      const step = gauss()*6 + (inMom ? dir*0.9*0.35*3 : 0);
+      px += step;
+      const sp = Math.abs(gauss()*4);
+      arr.push({t:T.RANGE_START+i, open:px-gauss()*2, high:px+sp, low:px-sp, close:px,
+        volume:Math.max(1, 120+gauss()*11 + (Math.abs(step)>9?180:0))});
+    }
+    DAYS.set(key, arr);
+  }
+}
+
+/* ---------- 回測核心(對齊 Python 版) ---------- */
+function runBacktest(){
+  const P = {
+    rangeEnd:+$("pRangeEnd").value, buffer:+$("pBuffer").value,
+    volMult:+$("pVolMult").value, cost:+$("pCost").value, allowShort:$("pShort").checked
+  };
+  const trades = []; let noSignal = 0;
+  for(const key of [...DAYS.keys()].sort()){
+    const bars = DAYS.get(key);
+    const rng = bars.filter(b => b.t>=T.RANGE_START && b.t<=P.rangeEnd);
+    if(rng.length < 30) continue;
+    const rHi = Math.max(...rng.map(b=>b.high)), rLo = Math.min(...rng.map(b=>b.low));
+    const avgVol = rng.reduce((s,b)=>s+b.volume,0)/rng.length;
+    const st = bars.filter(b => b.t>=T.SETTLE_A && b.t<=T.SETTLE_B);
+    if(!st.length) continue;
+    const settle = st.reduce((s,b)=>s+b.close,0)/st.length;
+    let entry = null;
+    for(const b of bars){
+      if(b.t <= P.rangeEnd || b.t > T.CUTOFF) continue;
+      const volOk = P.volMult<=0 || b.volume >= avgVol*P.volMult;
+      if(!volOk) continue;
+      if(b.high >= rHi+P.buffer){ entry={side:"LONG", t:b.t, px:rHi+P.buffer}; break; }
+      if(P.allowShort && b.low <= rLo-P.buffer){ entry={side:"SHORT", t:b.t, px:rLo-P.buffer}; break; }
+    }
+    if(!entry){ noSignal++; continue; }
+    const raw = entry.side==="LONG" ? settle-entry.px : entry.px-settle;
+    trades.push({date:key, side:entry.side,
+      entryTime:`${String(Math.floor(entry.t/60)).padStart(2,"0")}:${String(entry.t%60).padStart(2,"0")}`,
+      entryPx:+entry.px.toFixed(1), settle:+settle.toFixed(1), net:+(raw-P.cost).toFixed(2)});
+  }
+  lastTrades = trades;
+  render(trades, noSignal);
+}
+
+/* ---------- 指標與渲染 ---------- */
+const mean = a => a.reduce((s,x)=>s+x,0)/a.length;
+function render(tr, noSignal){
+  $("report").style.display = "block";
+  $("synBanner").style.display = isSynthetic ? "block" : "none";
+  const cards = $("cards");
+  if(!tr.length){ cards.innerHTML = `<div class="card"><div class="k">結果</div><div class="v">無成交</div></div>`; return; }
+  const pts = tr.map(t=>t.net);
+  const wins = pts.filter(p=>p>0), losses = pts.filter(p=>p<=0);
+  const avg = mean(pts);
+  const sd = pts.length>1 ? Math.sqrt(pts.reduce((s,x)=>s+(x-avg)**2,0)/(pts.length-1)) : 0;
+  const tstat = sd>0 ? avg/(sd/Math.sqrt(pts.length)) : NaN;
+  const total = pts.reduce((s,x)=>s+x,0);
+  let eq=0, peak=0, mdd=0; const eqArr=[], ddArr=[];
+  for(const p of pts){ eq+=p; peak=Math.max(peak,eq); eqArr.push(eq); ddArr.push(eq-peak); mdd=Math.min(mdd,eq-peak); }
+  const pf = losses.length && losses.reduce((s,x)=>s+x,0)!==0
+    ? wins.reduce((s,x)=>s+x,0)/Math.abs(losses.reduce((s,x)=>s+x,0)) : Infinity;
+
+  const C = (k,v,cls="") => `<div class="card"><div class="k">${k}</div><div class="v ${cls}">${v}</div></div>`;
+  cards.innerHTML =
+    C("掃描 / 成交 / 無訊號", `${DAYS.size} / ${tr.length} / ${noSignal}`) +
+    C("勝率", (wins.length/pts.length*100).toFixed(1)+"%") +
+    C("總淨點數", total.toFixed(1), total>0?"up":"dn") +
+    C("平均每筆", avg.toFixed(2), avg>0?"up":"dn") +
+    C("賺賠比", losses.length&&wins.length ? (mean(wins)/Math.abs(mean(losses))).toFixed(2) : "-") +
+    C("Profit Factor", isFinite(pf)?pf.toFixed(2):"∞") +
+    C("t 統計量", isFinite(tstat)?tstat.toFixed(2):"-", Math.abs(tstat)>=2?"up":"") +
+    C("最大回撤(點)", mdd.toFixed(1), "dn") +
+    C("大台換算(NT$)", (total*200).toLocaleString("zh-TW"), total>0?"up":"dn");
+
+  // 多空表
+  const bySide = side => {
+    const g = tr.filter(t=>t.side===side); if(!g.length) return "";
+    const gp = g.map(t=>t.net), tot = gp.reduce((s,x)=>s+x,0);
+    return `<tr><td>${side}</td><td>${g.length}</td><td>${(gp.filter(p=>p>0).length/g.length*100).toFixed(0)}%</td>
+      <td class="${mean(gp)>0?'up':'dn'}">${mean(gp).toFixed(2)}</td><td class="${tot>0?'up':'dn'}">${tot.toFixed(1)}</td></tr>`;
+  };
+  $("tblSide").innerHTML = `<tr><th>方向</th><th>筆數</th><th>勝率</th><th>平均</th><th>總點數</th></tr>` +
+    bySide("LONG") + bySide("SHORT");
+
+  // 進場時段
+  const hrs = {};
+  tr.forEach(t => { const h=t.entryTime.slice(0,2); hrs[h]=(hrs[h]||0)+1; });
+  $("tblHour").innerHTML = `<tr><th>時段</th><th>筆數</th></tr>` +
+    Object.keys(hrs).sort().map(h=>`<tr><td>${h}:00–${h}:59</td><td>${hrs[h]}</td></tr>`).join("");
+
+  // 分月
+  const mon = {};
+  tr.forEach(t => { const m=t.date.slice(0,7); (mon[m]=mon[m]||[]).push(t.net); });
+  $("tblMon").innerHTML = `<tr><th>月份</th><th>筆數</th><th>淨點數</th><th>勝率</th></tr>` +
+    Object.keys(mon).sort().map(m => { const g=mon[m], tot=g.reduce((s,x)=>s+x,0);
+      return `<tr><td>${m}</td><td>${g.length}</td><td class="${tot>0?'up':'dn'}">${tot.toFixed(1)}</td>
+        <td>${(g.filter(p=>p>0).length/g.length*100).toFixed(0)}%</td></tr>`; }).join("");
+
+  drawCharts(tr, eqArr, ddArr, pts, mon);
+  $("report").scrollIntoView({behavior:"smooth"});
+}
+
+function drawCharts(tr, eqArr, ddArr, pts, mon){
+  const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const UP=css("--up"), DN=css("--dn"), INK=css("--ink"), SOFT=css("--ink-soft");
+  Object.values(charts).forEach(c=>c.destroy()); charts={};
+  const labels = tr.map(t=>t.date);
+  const base = {responsive:true, plugins:{legend:{display:false}},
+    scales:{x:{ticks:{color:SOFT,maxTicksLimit:10,font:{size:10}}},
+            y:{ticks:{color:SOFT,font:{size:10}}}}};
+  charts.eq = new Chart($("chEq"), {type:"line",
+    data:{labels, datasets:[{data:eqArr, borderColor:INK, borderWidth:1.6, pointRadius:0, fill:false}]},
+    options:base});
+  charts.dd = new Chart($("chDD"), {type:"line",
+    data:{labels, datasets:[{data:ddArr, borderColor:DN, backgroundColor:DN+"44",
+      borderWidth:1, pointRadius:0, fill:true}]}, options:base});
+  // 直方圖
+  const lo = Math.floor(Math.min(...pts)/10)*10, hi = Math.ceil(Math.max(...pts)/10)*10;
+  const nb = Math.min(25, Math.max(8, Math.round((hi-lo)/10)));
+  const w = (hi-lo)/nb, bins = Array(nb).fill(0);
+  pts.forEach(p => bins[Math.min(nb-1, Math.floor((p-lo)/w))]++);
+  charts.hist = new Chart($("chHist"), {type:"bar",
+    data:{labels:bins.map((_,i)=>(lo+i*w).toFixed(0)),
+      datasets:[{data:bins, backgroundColor:bins.map((_,i)=> lo+(i+0.5)*w>0 ? UP : DN)}]},
+    options:base});
+  // 分月
+  const mk = Object.keys(mon).sort();
+  const mv = mk.map(m=>mon[m].reduce((s,x)=>s+x,0));
+  charts.mon = new Chart($("chMon"), {type:"bar",
+    data:{labels:mk, datasets:[{data:mv, backgroundColor:mv.map(v=>v>0?UP:DN)}]},
+    options:base});
+}
+
+function exportCsv(){
+  if(!lastTrades.length) return;
+  const head = "date,side,entry_time,entry_px,settle,net_pts";
+  const body = lastTrades.map(t=>[t.date,t.side,t.entryTime,t.entryPx,t.settle,t.net].join(","));
+  const blob = new Blob(["\ufeff"+head+"\n"+body.join("\n")], {type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `txo_settlement_trades${isSynthetic?"_SYNTHETIC":""}.csv`;
+  a.click(); URL.revokeObjectURL(a.href);
+}
+</script>
+</body>
+</html>
