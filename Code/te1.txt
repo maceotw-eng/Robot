@@ -1,0 +1,179 @@
+root@memebot:~/sol-meme-bot/src# cd ~/sol-meme-bot
+{ echo "=== broker.js ==="; cat src/broker.js; echo "=== missed.js ==="; cat src/missed.js; } > /tmp/test2.txt
+grep -in "token\|key\|secret" /tmp/test2.txt || echo "乾淨,可上傳"
+cat /tmp/test2.txt
+42:      const { Connection, Keypair, VersionedTransaction } = await import("@solana/web3.js");
+45:      const key = fs.readFileSync(cfg.live.privateKeyFile, "utf8").trim();
+46:      const kp = Keypair.fromSecretKey(bs58.decode(key));
+48:      log(`[實盤] 錢包 ${kp.publicKey.toBase58()} 已載入 — 請確認這是小額燒錢包！`);
+64:      body: JSON.stringify({ quoteResponse: q, userPublicKey: kp.publicKey.toBase58(), wrapAndUnwrapSol: true }),
+151:  const baseId = ((p.relationships || {}).base_token || {}).data;
+=== broker.js ===
+// ═══════════════════════════════════════════════
+// broker.js — 成交執行層
+//   paper：模擬成交（含滑點與手續費，貼近真實）
+//   live ：Jupiter v6 真實下單（僅在 mode=live 時載入依賴）
+// ═══════════════════════════════════════════════
+const WSOL = "So11111111111111111111111111111111111111112";
+
+export function makeBroker(cfg, log) {
+  if (cfg.mode === "live") return liveBroker(cfg, log);
+  return paperBroker(cfg, log);
+}
+
+/* ────────── 模擬盤 ────────── */
+function paperBroker(cfg, log) {
+  return {
+    kind: "paper",
+    // 買入：以現價加滑點成交，回傳實際取得的 代幣數量
+    async buy(addr, priceUsd, solUsd, sizeSOL) {
+      const fillPrice = priceUsd * (1 + cfg.slippagePct / 100);
+      const usd = (sizeSOL - cfg.feeSOLPerTrade) * solUsd;
+      const qty = usd / fillPrice;
+      log(`[模擬買入] ${addr.slice(0, 6)}… ${sizeSOL} SOL @ $${fillPrice.toPrecision(4)}（含滑點${cfg.slippagePct}%）`);
+      return { fillPrice, qty, costSOL: sizeSOL };
+    },
+    // 賣出：以現價減滑點成交，回傳取回的 SOL
+    async sell(addr, priceUsd, solUsd, qty) {
+      const fillPrice = priceUsd * (1 - cfg.slippagePct / 100);
+      const solOut = (qty * fillPrice) / solUsd - cfg.feeSOLPerTrade;
+      log(`[模擬賣出] ${addr.slice(0, 6)}… qty=${qty.toPrecision(5)} @ $${fillPrice.toPrecision(4)}`);
+      return { fillPrice, solOut: Math.max(0, solOut) };
+    },
+  };
+}
+
+/* ────────── 實盤（Jupiter v6）────────── */
+function liveBroker(cfg, log) {
+  let ready = null;
+  async function setup() {
+    if (ready) return ready;
+    ready = (async () => {
+      const { Connection, Keypair, VersionedTransaction } = await import("@solana/web3.js");
+      const bs58 = (await import("bs58")).default;
+      const fs = await import("fs");
+      const key = fs.readFileSync(cfg.live.privateKeyFile, "utf8").trim();
+      const kp = Keypair.fromSecretKey(bs58.decode(key));
+      const conn = new Connection(cfg.live.rpcUrl, "confirmed");
+      log(`[實盤] 錢包 ${kp.publicKey.toBase58()} 已載入 — 請確認這是小額燒錢包！`);
+      return { conn, kp, VersionedTransaction };
+    })();
+    return ready;
+  }
+
+  async function jupSwap(inputMint, outputMint, amountRaw, slippageBps) {
+    const { conn, kp, VersionedTransaction } = await setup();
+    const q = await (await fetch(
+      `https://quote-api.jup.ag/v6/quote?inputMint=${inputMint}&outputMint=${outputMint}` +
+      `&amount=${amountRaw}&slippageBps=${slippageBps}`
+    )).json();
+    if (!q || q.error) throw new Error("Jupiter 報價失敗: " + (q && q.error));
+    const sw = await (await fetch("https://quote-api.jup.ag/v6/swap", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ quoteResponse: q, userPublicKey: kp.publicKey.toBase58(), wrapAndUnwrapSol: true }),
+    })).json();
+    if (!sw || !sw.swapTransaction) throw new Error("Jupiter 組單失敗");
+    const tx = VersionedTransaction.deserialize(Buffer.from(sw.swapTransaction, "base64"));
+    tx.sign([kp]);
+    const sig = await conn.sendRawTransaction(tx.serialize(), { maxRetries: 3 });
+    await conn.confirmTransaction(sig, "confirmed");
+    return { sig, outAmount: Number(q.outAmount) };
+  }
+
+  return {
+    kind: "live",
+    async buy(addr, priceUsd, solUsd, sizeSOL) {
+      const lamports = Math.floor(sizeSOL * 1e9);
+      const r = await jupSwap(WSOL, addr, lamports, cfg.slippagePct * 100);
+      log(`[實盤買入] ${addr.slice(0, 6)}… ${sizeSOL} SOL tx=${r.sig}`);
+      // 注意：實際數量為鏈上回傳，decimals 由 Jupiter quote 處理（outAmount 為最小單位）
+      return { fillPrice: priceUsd, qty: r.outAmount, costSOL: sizeSOL, sig: r.sig, rawQty: true };
+    },
+    async sell(addr, priceUsd, solUsd, qty) {
+      const r = await jupSwap(addr, WSOL, Math.floor(qty), cfg.slippagePct * 100);
+      const solOut = r.outAmount / 1e9;
+      log(`[實盤賣出] ${addr.slice(0, 6)}… tx=${r.sig} 取回 ${solOut.toFixed(4)} SOL`);
+      return { fillPrice: priceUsd, solOut };
+    },
+  };
+}
+=== missed.js ===
+// ═══════════════════════════════════════════════
+// missed.js — 遺珠追蹤器：找出「雷達沒抓到的 肥羊」
+// 每次執行：抓 GeckoTerminal 熱門池，找 24H  漲幅 ≥100% 的大贏家，
+// 比對 research.csv：完全沒掃到？掃到但分數太低？
+// 結果累積到 data/missed.csv → 未來修正「找標的」的依據
+// 用法：node src/missed.js
+// ═══════════════════════════════════════════════
+import fs from "fs";
+
+const GT = "https://api.geckoterminal.com/api/v2";
+const RESEARCH = "data/research.csv";
+const OUT = "data/missed.csv";
+const MIN_GAIN = 100;   // 24H 漲幅 ≥100% 才算肥羊
+const MIN_LIQ = 20000;  // 流動性門檻（太小的 池不算可交易機會）
+
+async function jget(url) {
+  const r = await fetch(url, { headers: { Accept: "application/json" } });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+
+// 1) 讀 research.csv：每個地址的最高分
+const seen = new Map();
+if (fs.existsSync(RESEARCH)) {
+  const rows = fs.readFileSync(RESEARCH, "utf8").trim().split("\n").slice(1);
+  for (const l of rows) {
+    const c = l.split(",");
+    const addr = c[1], score = parseFloat(c[5]) || 0;
+    if (!seen.has(addr) || score > seen.get(addr)) seen.set(addr, score);
+  }
+}
+console.log("雷達已掃過 " + seen.size + " 個地址");
+
+// 2) 抓 GT 熱門池（trending + 依24H交易數排序的池，兩路合併）
+const pools = [];
+for (const path of ["/networks/solana/trending_pools", "/networks/solana/pools?sort=h24_tx_count_desc&page=1"]) {
+  try {
+    const d = await jget(GT + path);
+    if (d && Array.isArray(d.data)) pools.push(...d.data);
+  } catch (e) { console.log("抓取失敗:", path, e.message); }
+  await new Promise(r => setTimeout(r, 800));
+}
+
+// 3) 篩肥羊 + 比對
+const already = new Set(
+  fs.existsSync(OUT)
+    ? fs.readFileSync(OUT, "utf8").trim().split("\n").slice(1).map(l => l.split(",")[2] + ":" + l.split(",")[0].slice(0,10))
+    : []
+);
+if (!fs.existsSync(OUT)) fs.writeFileSync(OUT, "time,symbol,addr,gain24hPct,liqUsd,fdvUsd,vol24hUsd,verdict,maxScoreSeen\n");
+
+const today = new Date().toISOString().slice(0, 10);
+let found = 0, blind = 0, lowScore = 0;
+const dedup = new Set();
+for (const p of pools) {
+  const a = p.attributes || {};
+  const gain = parseFloat((a.price_change_percentage || {}).h24) || 0;
+  const liq = parseFloat(a.reserve_in_usd) || 0;
+  if (gain < MIN_GAIN || liq < MIN_LIQ) continue;
+  const baseId = ((p.relationships || {}).base_token || {}).data;
+  const addr = baseId && baseId.id ? baseId.id.replace("solana_", "") : "";
+  if (!addr || dedup.has(addr)) continue;
+  dedup.add(addr);
+  if (already.has(addr + ":" + today)) continue; // 今天記過了
+  const sym = (a.name || "?").split(" / ")[0].replace(/,/g, ";");
+  const maxScore = seen.get(addr);
+  let verdict;
+  if (maxScore === undefined) { verdict = "盲 區:完全沒掃到"; blind++; }
+  else if (maxScore < 78) { verdict = "掃到但 分數不足"; lowScore++; }
+  else { verdict = "有掃到高分(檢查為何未收錄)"; }
+  found++;
+  fs.appendFileSync(OUT, [new Date().toISOString(), sym, addr, gain.toFixed(0),
+    Math.round(liq), Math.round(parseFloat(a.fdv_usd) || 0),
+    Math.round(parseFloat((a.volume_usd || {}).h24) || 0), verdict, maxScore ?? ""].join(",") + "\n");
+  console.log(`🐑 ${sym} +${gain.toFixed(0)}% LIQ $${(liq/1e3).toFixed(0)}K → ${verdict}${maxScore !== undefined ? "(最高" + maxScore + " 分)" : ""}`);
+}
+console.log(`\n本次肥羊 ${found} 隻 | 盲區 ${blind} | 分數不足 ${lowScore}`);
+console.log("累積紀錄: data/missed.csv（每天跑一次，一週後統計盲區來源）");
